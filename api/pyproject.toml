@@ -7,10 +7,12 @@ requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.17.0",
     "asyncpg>=0.30.0",
+    "aiofiles>=24.1.0",
     "fastapi[standard]>=0.120.0",
     "greenlet>=3.2.4",
     "pydantic-settings>=2.11.0",
     "pytest>=8.4.2",
+    "python-multipart>=0.0.12",
     "sqlmodel>=0.0.27",
     "workos>=5.31.2",
 ]

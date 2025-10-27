@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -12,7 +13,11 @@ class Settings(BaseSettings):
     DB_PASS: str = ""
     LOG_LEVEL: str | int = Field(default=logging.INFO)
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
+    model_config = SettingsConfigDict(
+        env_file=Path(__file__).parent.parent.parent / ".env",
+        extra="ignore",
+        populate_by_name=True
+    )
 
     @computed_field
     def DB_URL(self) -> str:  # noqa: N802
