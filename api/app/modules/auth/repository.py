@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 from sqlmodel import select
 
 from app.core.repositories import Repository
@@ -41,12 +43,12 @@ class UserRepository(Repository):
             return True
         return False
 
-    async def get_all(self, skip: int = 0, limit: int = 100) -> list[User]:
+    async def get_all(self, skip: int = 0, limit: int = 100) -> Sequence[User]:
         statement = select(User).offset(skip).limit(limit)
         result = await self._session.exec(statement)
         return result.all()
 
-    async def get_by_role(self, role: UserRole) -> list[User]:
+    async def get_by_role(self, role: UserRole) -> Sequence[User]:
         statement = select(User).where(User.role == role)
         result = await self._session.exec(statement)
         return result.all()
@@ -54,6 +56,6 @@ class UserRepository(Repository):
     async def count(self) -> int:
         from sqlmodel import func
 
-        statement = select(func.count(User.id))
+        statement = select(func.count()).select_from(User)
         result = await self._session.exec(statement)
         return result.first() or 0

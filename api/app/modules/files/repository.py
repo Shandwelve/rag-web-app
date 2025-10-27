@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 from sqlmodel import select
 
 from app.core.repositories import Repository
@@ -15,7 +17,7 @@ class FileRepository(Repository):
         result = await self._session.exec(select(File).where(File.id == file_id, File.user_id == user_id))
         return result.first()
 
-    async def get_by_user(self, user_id: int) -> list[File]:
+    async def get_by_user(self, user_id: int) -> Sequence[File]:
         result = await self._session.exec(select(File).where(File.user_id == user_id))
         return result.all()
 

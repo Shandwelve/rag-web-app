@@ -22,12 +22,20 @@ class FileCreate(FileBase):
     pass
 
 
-class FileRead(FileBase):
-    id: int
-    created_at: datetime
-    updated_at: datetime
-    file_path: str
-
-
 class FileUpdate(BaseModel):
     content_hash: str | None = None
+
+
+class FileResponse(BaseModel):
+    original_filename: str
+    file_size: int
+    file_type: FileType
+    created_at: datetime
+    updated_at: datetime
+    download_url: str | None = None
+
+
+class FileContentResponse(BaseModel):
+    content: bytes
+    original_filename: str
+    content_type: str

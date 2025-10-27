@@ -1,5 +1,5 @@
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Any
 
 import workos
 from fastapi import Depends
@@ -18,19 +18,17 @@ class AuthService:
         self,
         user_repository: Annotated[UserRepository, Depends(UserRepository)],
     ) -> None:
-        workos.api_key = settings.WORKOS_API_KEY
-        workos.client_id = settings.WORKOS_CLIENT_ID
         self.client = workos.WorkOSClient(api_key=settings.WORKOS_API_KEY, client_id=settings.WORKOS_CLIENT_ID)
         self.user_repository = user_repository
 
-    def create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
+    def create_access_token(self, data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
         to_encode = data.copy()
         if expires_delta:
             expire = datetime.now(UTC) + expires_delta
         else:
             expire = datetime.now(UTC) + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
         to_encode.update({"exp": expire})
-        encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+        encoded_jwt: str = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
         return encoded_jwt
 
     def verify_token(self, token: str) -> TokenData:

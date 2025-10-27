@@ -22,7 +22,7 @@ async def get_admin_stats(
 ) -> AdminStats:
     total_users = await user_repository.count()
 
-    file_count_stmt = select(func.count(File.id))
+    file_count_stmt = select(func.count()).select_from(File)
     file_count_result = await session.exec(file_count_stmt)
     total_files = file_count_result.first() or 0
 

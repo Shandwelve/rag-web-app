@@ -14,7 +14,7 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    workos_id: str | None = None
+    workos_id: str
 
 
 class WorkOSUser(BaseModel):

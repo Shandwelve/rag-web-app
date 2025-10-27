@@ -1,20 +1,25 @@
 import hashlib
+import mimetypes
+import uuid
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated
 
 import aiofiles
 from fastapi import Depends
 
+from app.core.config import settings
 from app.modules.files.exceptions import UnsupportedFileTypeError
-from app.modules.files.models import File, FileType
+from app.modules.files.models import File
 from app.modules.files.repository import FileRepository
+from app.modules.files.schema import FileContentResponse, FileType
 
 
 class FileService:
     def __init__(self, file_repository: Annotated[FileRepository, Depends()]) -> None:
         self.file_repository = file_repository
-        self.upload_dir = Path("uploads")
-        self.upload_dir.mkdir(exist_ok=True)
+        self.upload_dir = settings.STORAGE_DIR
+        self.upload_dir.mkdir(parents=True, exist_ok=True)
 
     async def save_file(self, file_content: bytes, filename: str, user_id: int) -> File:
         file_type = self._get_file_type(filename)
@@ -24,13 +29,15 @@ class FileService:
         if existing_file:
             return existing_file
 
-        file_path = self.upload_dir / f"{user_id}_{filename}"
+        file_extension = Path(filename).suffix
+        uuid_filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = self.upload_dir / uuid_filename
 
         async with aiofiles.open(file_path, "wb") as f:
             await f.write(file_content)
 
         file_record = File(
-            filename=filename,
+            filename=uuid_filename,
             original_filename=filename,
             file_path=str(file_path),
             file_size=len(file_content),
@@ -44,7 +51,7 @@ class FileService:
     async def get_file(self, file_id: int, user_id: int) -> File | None:
         return await self.file_repository.get_by_id(file_id, user_id)
 
-    async def get_user_files(self, user_id: int) -> list[File]:
+    async def get_user_files(self, user_id: int) -> Sequence[File]:
         return await self.file_repository.get_by_user(user_id)
 
     async def delete_file(self, file_id: int, user_id: int) -> bool:
@@ -56,6 +63,30 @@ class FileService:
             Path(file_record.file_path).unlink()
 
         return await self.file_repository.delete(file_id, user_id)
+
+    async def get_file_content(self, file_id: int, user_id: int) -> FileContentResponse | None:
+        """Get file content, original filename, and content type for download."""
+        file_record = await self.file_repository.get_by_id(file_id, user_id)
+        if not file_record:
+            return None
+
+        file_path = Path(file_record.file_path)
+        if not file_path.exists():
+            return None
+
+        async with aiofiles.open(file_path, "rb") as f:
+            content = await f.read()
+
+        # Determine content type based on file extension
+        content_type, _ = mimetypes.guess_type(file_record.original_filename)
+        if not content_type:
+            content_type = "application/octet-stream"
+
+        return FileContentResponse(
+            content=content,
+            original_filename=file_record.original_filename,
+            content_type=content_type
+        )
 
     def _get_file_type(self, filename: str) -> FileType:
         extension = Path(filename).suffix.lower()
