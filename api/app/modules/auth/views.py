@@ -3,11 +3,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from workos.types.sso import SsoProviderType
 
+from app.core.schema import MessageResponse
 from app.modules.auth.exceptions import AuthenticationError
-from app.modules.auth.middleware import get_current_user
+from app.modules.auth.middleware import get_current_user, get_current_admin_user
 from app.modules.auth.models import User
 from app.modules.auth.repository import UserRepository
-from app.modules.auth.schema import LoginResponse, Token, UserInfo
+from app.modules.auth.schema import LoginResponse, Token, UserInfo, UserCreate, UserUpdate, UserResponse, UserListResponse
 from app.modules.auth.service import AuthService
 from app.modules.auth.state_manager import StateManager
 
@@ -75,3 +76,65 @@ async def refresh_token(
         return Token(access_token=new_token, token_type="bearer")
     except AuthenticationError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+
+
+@router.post("/users", response_model=UserResponse)
+async def create_user(
+    user_data: UserCreate,
+    auth_service: Annotated[AuthService, Depends(AuthService)],
+    current_admin: Annotated[User, Depends(get_current_admin_user)],
+) -> UserResponse:
+    try:
+        return await auth_service.create_user(user_data)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/users", response_model=UserListResponse)
+async def get_users(
+    auth_service: Annotated[AuthService, Depends(AuthService)],
+    current_admin: Annotated[User, Depends(get_current_admin_user)],
+    skip: int = 0,
+    limit: int = 100,
+) -> UserListResponse:
+    return await auth_service.get_users(skip, limit)
+
+
+@router.get("/users/{user_id}", response_model=UserResponse)
+async def get_user(
+    user_id: int,
+    auth_service: Annotated[AuthService, Depends(AuthService)],
+    current_admin: Annotated[User, Depends(get_current_admin_user)],
+) -> UserResponse:
+    user = await auth_service.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
+
+
+@router.put("/users/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: int,
+    user_data: UserUpdate,
+    auth_service: Annotated[AuthService, Depends(AuthService)],
+    current_admin: Annotated[User, Depends(get_current_admin_user)],
+) -> UserResponse:
+    try:
+        user = await auth_service.update_user(user_id, user_data)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        return user
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    auth_service: Annotated[AuthService, Depends(AuthService)],
+    current_admin: Annotated[User, Depends(get_current_admin_user)],
+) -> MessageResponse:
+    success = await auth_service.delete_user(user_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return MessageResponse(message="User deleted successfully")

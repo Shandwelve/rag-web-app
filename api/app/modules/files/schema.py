@@ -27,6 +27,7 @@ class FileUpdate(BaseModel):
 
 
 class FileResponse(BaseModel):
+    id: int
     original_filename: str
     file_size: int
     file_type: FileType

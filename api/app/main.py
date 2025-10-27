@@ -10,7 +10,6 @@ from fastapi.responses import JSONResponse
 
 from app.core.exceptions import BaseServiceError
 from app.core.logging import get_logger, setup_logging
-from app.modules.admin.views import router as admin_router
 from app.modules.auth.views import router as auth_router
 from app.modules.files.views import router as files_router
 
@@ -28,7 +27,6 @@ app.add_middleware(
 
 app.include_router(files_router)
 app.include_router(auth_router)
-app.include_router(admin_router)
 
 
 @app.exception_handler(HTTPException)

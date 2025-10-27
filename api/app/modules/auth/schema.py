@@ -33,3 +33,29 @@ class UserInfo(BaseModel):
 
 class LoginResponse(BaseModel):
     authorization_url: str
+
+
+class UserCreate(BaseModel):
+    email: str
+    role: UserRole = UserRole.USER
+
+
+class UserUpdate(BaseModel):
+    email: str | None = None
+    role: UserRole | None = None
+
+
+class UserResponse(BaseModel):
+    id: int
+    workos_id: str | None
+    email: str | None
+    role: UserRole
+    created_at: str
+    updated_at: str
+
+
+class UserListResponse(BaseModel):
+    users: list[UserResponse]
+    total: int
+    skip: int
+    limit: int
