@@ -6,17 +6,28 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    LOG_LEVEL: str | int = Field(default=logging.INFO)
+
     DB_HOST: str = ""
     DB_PORT: str = ""
     DB_NAME: str = ""
     DB_USER: str = ""
     DB_PASS: str = ""
-    LOG_LEVEL: str | int = Field(default=logging.INFO)
+
+    WORKOS_API_KEY: str = ""
+    WORKOS_CLIENT_ID: str = ""
+    WORKOS_REDIRECT_URI: str = ""
+    WORKOS_STATE_SECRET: str = ""
+    WORKOS_STATE_TIMEOUT: int = 600
+
+    JWT_SECRET_KEY: str = ""
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).parent.parent.parent / ".env",
         extra="ignore",
-        populate_by_name=True
+        populate_by_name=True,
     )
 
     @computed_field

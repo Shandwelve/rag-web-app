@@ -6,9 +6,7 @@ from pydantic import BaseModel
 
 class FileType(StrEnum):
     PDF = "pdf"
-    TXT = "txt"
     DOCX = "docx"
-    MD = "md"
 
 
 class FileBase(BaseModel):

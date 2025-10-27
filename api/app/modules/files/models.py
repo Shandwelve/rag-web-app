@@ -1,4 +1,3 @@
-from enum import Enum
 from sqlmodel import Field
 
 from app.core.models import BaseModel
