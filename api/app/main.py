@@ -15,7 +15,6 @@ from app.modules.auth.views import router as auth_router
 from app.modules.files.views import router as files_router
 from app.modules.rag.views import router as rag_router
 
-
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 setup_logging()
 logger = get_logger(__name__)

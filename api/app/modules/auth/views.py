@@ -5,17 +5,17 @@ from workos.types.sso import SsoProviderType
 
 from app.core.schema import MessageResponse
 from app.modules.auth.exceptions import AuthenticationError
-from app.modules.auth.middleware import get_current_user, get_current_admin_user
+from app.modules.auth.middleware import get_current_admin_user, get_current_user
 from app.modules.auth.models import User
 from app.modules.auth.repository import UserRepository
 from app.modules.auth.schema import (
     LoginResponse,
     Token,
-    UserInfo,
     UserCreate,
-    UserUpdate,
-    UserResponse,
+    UserInfo,
     UserListResponse,
+    UserResponse,
+    UserUpdate,
 )
 from app.modules.auth.service import AuthService
 from app.modules.auth.state_manager import StateManager

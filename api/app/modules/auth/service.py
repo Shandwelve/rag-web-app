@@ -13,12 +13,12 @@ from app.modules.auth.repository import UserRepository
 from app.modules.auth.schema import (
     Token,
     TokenData,
-    UserRole,
-    WorkOSUser,
     UserCreate,
-    UserUpdate,
-    UserResponse,
     UserListResponse,
+    UserResponse,
+    UserRole,
+    UserUpdate,
+    WorkOSUser,
 )
 
 

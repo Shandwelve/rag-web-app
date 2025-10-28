@@ -1,8 +1,9 @@
 from typing import Any
+
 import chromadb
+import openai
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
-import openai
 from unstructured.documents.elements import Element
 from unstructured.partition.pdf import partition_pdf
 
@@ -10,7 +11,7 @@ from app.core.config import settings
 
 
 class VectorStoreManager:
-    def __init__(self):
+    def __init__(self) -> None:
         self.client = chromadb.PersistentClient(
             path=settings.CHROMA_PERSIST_DIRECTORY,
             settings=Settings(anonymized_telemetry=False),
@@ -45,6 +46,7 @@ class VectorStoreManager:
                 results["documents"][0],
                 results["metadatas"][0],
                 results["distances"][0],
+                strict=True,
             )
         ]
 
@@ -53,7 +55,7 @@ class VectorStoreManager:
 
 
 class PDFContentManager:
-    def process(self, file_path: str):
+    def process(self, file_path: str) -> tuple[list[Element], list[str]]:
         texts = []
         chunks = partition_pdf(
             filename=file_path,
@@ -73,7 +75,7 @@ class PDFContentManager:
         images = self._get_images_base64(chunks)
         return texts, images
 
-    def _get_images_base64(self, chunks: list[Element]):
+    def _get_images_base64(self, chunks: list[Element]) -> list[str]:
         images_b64 = []
         for chunk in chunks:
             if chunk.category == "CompositeElement":

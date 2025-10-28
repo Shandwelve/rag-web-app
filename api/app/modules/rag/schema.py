@@ -1,36 +1,44 @@
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import TypedDict
+
 from pydantic import BaseModel
+
+
+class RAGResult(TypedDict):
+    answer_text: str
+    sources: list[str]
+    images: list[str]
+    confidence_score: float
 
 
 class QuestionRequest(BaseModel):
     question: str
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 class VoiceQuestionRequest(BaseModel):
-    audio_data: str
+    session_id: str | None = None
 
 
 class SourceReference(BaseModel):
     file_id: int
     filename: str
-    page_number: Optional[int] = None
+    page_number: int | None = None
     chunk_index: int
     relevance_score: float
 
 
 class ImageReference(BaseModel):
     image_path: str
-    description: Optional[str] = None
-    page_number: Optional[int] = None
+    description: str | None = None
+    page_number: int | None = None
     file_id: int
 
 
 class AnswerResponse(BaseModel):
     answer: str
-    sources: List[SourceReference]
-    images: List[ImageReference] = []
+    sources: list[SourceReference]
+    images: list[ImageReference] = []
     confidence_score: float
     question_id: int
 
@@ -38,8 +46,8 @@ class AnswerResponse(BaseModel):
 class QuestionHistory(BaseModel):
     id: int
     question_text: str
-    answer_text: Optional[str]
-    sources: List[SourceReference]
+    answer_text: str | None
+    sources: list[SourceReference]
     created_at: datetime
 
 
@@ -48,7 +56,7 @@ class DocumentProcessingStatus(BaseModel):
     status: str
     chunks_created: int
     images_extracted: int
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 class RAGStats(BaseModel):
@@ -56,47 +64,53 @@ class RAGStats(BaseModel):
     total_chunks: int
     total_questions: int
     total_images: int
-    last_processed: Optional[datetime] = None
+    last_processed: datetime | None = None
 
 
 class QuestionCreate(BaseModel):
     question_text: str
     user_id: int
-    session_id: Optional[str] = None
-    context_files: Optional[str] = None
+    session_id: str | None = None
+    context_files: str | None = None
 
 
 class AnswerCreate(BaseModel):
     answer_text: str
     question_id: int
     confidence_score: float
-    sources_used: Optional[str] = None
-    images_used: Optional[str] = None
-    processing_time_ms: Optional[int] = None
+    sources_used: str | None = None
+    images_used: str | None = None
+    processing_time_ms: int | None = None
 
 
 class QuestionResponse(BaseModel):
     id: int
     question_text: str
     user_id: int
-    session_id: Optional[str]
-    context_files: Optional[str]
+    session_id: str | None
+    context_files: str | None
     created_at: datetime
     updated_at: datetime
 
 
-class AnswerResponse(BaseModel):
+class QAResponse(BaseModel):
     id: int
     answer_text: str
     question_id: int
     confidence_score: float
-    sources_used: Optional[str]
-    images_used: Optional[str]
-    processing_time_ms: Optional[int]
+    sources_used: str | None
+    images_used: str | None
+    processing_time_ms: str | None
     created_at: datetime
     updated_at: datetime
 
 
 class QAPairResponse(BaseModel):
     question: QuestionResponse
-    answer: AnswerResponse
+    answer: QAResponse
+
+
+class QuestionStats(BaseModel):
+    total_questions: int
+    total_answers: int
+    avg_confidence: float

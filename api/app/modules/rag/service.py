@@ -1,28 +1,51 @@
-from typing import Annotated, Any, Dict, List
 import json
-import time
 import logging
+import tempfile
+import time
+from typing import Annotated, Any
 
-from fastapi import Depends
+import aiofiles
+import openai
+from fastapi import Depends, UploadFile
 
 from app.modules.files.repository import FileRepository
 from app.modules.files.schema import FileType
 from app.modules.rag.managers import (
+    OpenAIService,
     PDFContentManager,
     VectorStoreManager,
-    OpenAIService,
 )
+from app.modules.rag.models import Answer, Question
+from app.modules.rag.repository import QARepository
 from app.modules.rag.schema import (
-    QuestionRequest,
+    AnswerCreate,
     AnswerResponse,
-    SourceReference,
     ImageReference,
     QuestionCreate,
-    AnswerCreate,
+    QuestionRequest,
+    QuestionStats,
+    RAGResult,
+    SourceReference,
 )
-from app.modules.rag.repository import QARepository
 
 logger = logging.getLogger(__name__)
+
+
+class AudioProcessingService:
+    async def transcribe_with_openai(
+        self, audio_data: bytes, filename: str = None
+    ) -> tuple[str, dict[str, Any]]:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+            temp_file.write(audio_data)
+            temp_file.flush()
+
+            async with aiofiles.open(temp_file.name, "rb") as f:
+                transcript = openai.Audio.transcribe("whisper-1", f)
+                transcribed_text = transcript.text.strip()
+
+            metadata = {"provider": "openai", "filename": filename}
+
+            return transcribed_text, metadata
 
 
 class DocumentService:
@@ -33,12 +56,16 @@ class DocumentService:
         openai_service: Annotated[OpenAIService, Depends(OpenAIService)],
         files_repository: Annotated[FileRepository, Depends(FileRepository)],
         qa_repository: Annotated[QARepository, Depends(QARepository)],
+        audio_service: Annotated[
+            AudioProcessingService, Depends(AudioProcessingService)
+        ],
     ) -> None:
         self.pdf_manager = pdf_manager
         self.vector_store = vector_store
         self.openai_service = openai_service
         self.files_repository = files_repository
         self.qa_repository = qa_repository
+        self.audio_service = audio_service
         self.processed_files = {}
 
     async def process_question(
@@ -75,7 +102,9 @@ class DocumentService:
 
             return self._build_response(question_record.id, error_result)
 
-    async def _create_question_record(self, question: QuestionRequest, user_id: int):
+    async def _create_question_record(
+        self, question: QuestionRequest, user_id: int
+    ) -> Question:
         return await self.qa_repository.create_question(
             QuestionCreate(
                 question_text=question.question,
@@ -84,7 +113,7 @@ class DocumentService:
             )
         )
 
-    async def _process_rag_query(self, question_text: str) -> dict:
+    async def _process_rag_query(self, question_text: str) -> RAGResult:
         pdf_files = await self._get_available_pdf_files()
 
         if not pdf_files:
@@ -102,7 +131,7 @@ class DocumentService:
         files = await self.files_repository.get_all()
         return [file for file in files if file.file_type == FileType.PDF]
 
-    def _create_no_documents_result(self) -> dict:
+    def _create_no_documents_result(self) -> RAGResult:
         return {
             "answer_text": "No PDF documents available for processing.",
             "sources": [],
@@ -110,7 +139,7 @@ class DocumentService:
             "confidence_score": 0.0,
         }
 
-    def _create_no_results_result(self) -> dict:
+    def _create_no_results_result(self) -> RAGResult:
         return {
             "answer_text": "No relevant information found in the documents.",
             "sources": [],
@@ -120,7 +149,7 @@ class DocumentService:
 
     async def _generate_rag_response(
         self, question_text: str, search_results: list
-    ) -> dict:
+    ) -> RAGResult:
         context = self._build_context(search_results)
         answer_text = self.openai_service.generate_answer(question_text, context)
         sources = self._build_sources(search_results)
@@ -134,7 +163,7 @@ class DocumentService:
             "confidence_score": confidence_score,
         }
 
-    def _create_error_result(self, error_message: str) -> dict:
+    def _create_error_result(self, error_message: str) -> RAGResult:
         return {
             "answer_text": f"An error occurred while processing your question: {error_message}",
             "sources": [],
@@ -147,7 +176,7 @@ class DocumentService:
 
     async def _create_answer_record(
         self, question_id: int, rag_result: dict, processing_time: int
-    ):
+    ) -> Answer:
         return await self.qa_repository.create_answer(
             AnswerCreate(
                 answer_text=rag_result["answer_text"],
@@ -174,11 +203,11 @@ class DocumentService:
             question_id=question_id,
         )
 
-    async def get_question_history(self, user_id: int, limit: int = 50) -> List[Dict]:
+    async def get_question_history(self, user_id: int, limit: int = 50) -> list[dict]:
         qa_pairs = await self.qa_repository.get_qa_pairs_by_user(user_id, limit)
         return [{"question": qa_pair[0], "answer": qa_pair[1]} for qa_pair in qa_pairs]
 
-    async def get_session_history(self, session_id: str) -> List[Dict]:
+    async def get_session_history(self, session_id: str) -> list[dict]:
         questions = await self.qa_repository.get_questions_by_session(session_id)
         qa_pairs = []
 
@@ -192,8 +221,85 @@ class DocumentService:
     async def delete_question(self, question_id: int) -> bool:
         return await self.qa_repository.delete_question(question_id)
 
-    async def get_user_stats(self, user_id: int) -> Dict:
+    async def get_user_stats(self, user_id: int) -> QuestionStats:
         return await self.qa_repository.get_question_stats(user_id)
+
+    async def process_audio_question(
+        self, audio_file: UploadFile, user_id: int = 1, session_id: str = None
+    ) -> AnswerResponse:
+        start_time = time.time()
+        logger.info(f"Processing audio question for user {user_id}")
+
+        try:
+            audio_data = await audio_file.read()
+            transcribed_text, audio_metadata = (
+                await self.audio_service.transcribe_with_openai(
+                    audio_data, audio_file.filename
+                )
+            )
+
+            logger.info(f"Transcribed audio: '{transcribed_text[:100]}...'")
+
+            question_record = await self._create_audio_question_record(
+                transcribed_text, user_id, session_id, audio_metadata
+            )
+
+            rag_result = await self._process_rag_query(transcribed_text)
+            processing_time = self._calculate_processing_time(start_time)
+
+            rag_result["audio_metadata"] = audio_metadata
+
+            await self._create_answer_record(
+                question_record.id, rag_result, processing_time
+            )
+
+            logger.info(
+                f"Successfully processed audio question {question_record.id} in {processing_time}ms"
+            )
+            return self._build_response(question_record.id, rag_result)
+
+        except Exception as e:
+            processing_time = self._calculate_processing_time(start_time)
+            error_result = self._create_error_result(
+                f"Audio processing failed: {str(e)}"
+            )
+
+            logger.error(f"Error processing audio question: {str(e)}")
+
+            try:
+                question_record = await self._create_audio_question_record(
+                    f"[Audio processing failed: {str(e)}]", user_id, session_id, {}
+                )
+                await self._create_answer_record(
+                    question_record.id, error_result, processing_time
+                )
+                return self._build_response(question_record.id, error_result)
+            except Exception:
+                return AnswerResponse(
+                    answer=f"Failed to process audio question: {str(e)}",
+                    sources=[],
+                    images=[],
+                    confidence_score=0.0,
+                    question_id=0,
+                )
+
+    async def _create_audio_question_record(
+        self,
+        transcribed_text: str,
+        user_id: int,
+        session_id: str = None,
+        audio_metadata: dict = None,
+    ) -> Question:
+        context_files = json.dumps(audio_metadata) if audio_metadata else None
+
+        return await self.qa_repository.create_question(
+            QuestionCreate(
+                question_text=transcribed_text,
+                user_id=user_id,
+                session_id=session_id,
+                context_files=context_files,
+            )
+        )
 
     async def _process_documents(self, files: list[Any]) -> None:
         for file in files:

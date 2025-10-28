@@ -1,5 +1,4 @@
-from sqlmodel import Field, Relationship
-from typing import List, Optional
+from sqlmodel import Field
 
 from app.core.models import BaseModel
 from app.modules.files.schema import FileType

@@ -1,10 +1,8 @@
-from typing import List, Optional
 from sqlmodel import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.repositories import Repository
-from app.modules.rag.models import Question, Answer
-from app.modules.rag.schema import QuestionCreate, AnswerCreate
+from app.modules.rag.models import Answer, Question
+from app.modules.rag.schema import AnswerCreate, QuestionCreate, QuestionStats
 
 
 class QARepository(Repository):
@@ -22,13 +20,13 @@ class QARepository(Repository):
         await self._session.refresh(answer)
         return answer
 
-    async def get_question_by_id(self, question_id: int) -> Optional[Question]:
+    async def get_question_by_id(self, question_id: int) -> Question | None:
         result = await self._session.exec(
             select(Question).where(Question.id == question_id)
         )
         return result.scalar_one_or_none()
 
-    async def get_answers_by_question_id(self, question_id: int) -> List[Answer]:
+    async def get_answers_by_question_id(self, question_id: int) -> list[Answer]:
         result = await self._session.exec(
             select(Answer).where(Answer.question_id == question_id)
         )
@@ -36,7 +34,7 @@ class QARepository(Repository):
 
     async def get_questions_by_user(
         self, user_id: int, limit: int = 50
-    ) -> List[Question]:
+    ) -> list[Question]:
         result = await self._session.exec(
             select(Question)
             .where(Question.user_id == user_id)
@@ -45,7 +43,7 @@ class QARepository(Repository):
         )
         return list(result.scalars().all())
 
-    async def get_questions_by_session(self, session_id: str) -> List[Question]:
+    async def get_questions_by_session(self, session_id: str) -> list[Question]:
         result = await self._session.exec(
             select(Question)
             .where(Question.session_id == session_id)
@@ -55,7 +53,7 @@ class QARepository(Repository):
 
     async def get_qa_pairs_by_user(
         self, user_id: int, limit: int = 50
-    ) -> List[tuple[Question, Answer]]:
+    ) -> list[tuple[Question, Answer]]:
         result = await self._session.exec(
             select(Question, Answer)
             .join(Answer, Question.id == Answer.question_id)
@@ -73,7 +71,7 @@ class QARepository(Repository):
             return True
         return False
 
-    async def get_question_stats(self, user_id: int) -> dict:
+    async def get_question_stats(self, user_id: int) -> QuestionStats:
         questions_result = await self._session.exec(
             select(Question).where(Question.user_id == user_id)
         )
@@ -84,12 +82,12 @@ class QARepository(Repository):
         )
         answers = list(answers_result.scalars().all())
 
-        return {
-            "total_questions": len(questions),
-            "total_answers": len(answers),
-            "avg_confidence": (
+        return QuestionStats(
+            total_questions=len(questions),
+            total_answers=len(answers),
+            avg_confidence=(
                 sum(a.confidence_score for a in answers) / len(answers)
                 if answers
                 else 0
             ),
-        }
+        )

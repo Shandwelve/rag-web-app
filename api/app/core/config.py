@@ -25,7 +25,6 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
-    # RAG Configuration
     OPENAI_API_KEY: str = ""
     CHROMA_PERSIST_DIRECTORY: str = "chroma_db"
     EMBEDDING_MODEL: str = "text-embedding-3-small"
@@ -34,9 +33,8 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 1000
     CHUNK_OVERLAP: int = 200
 
-    # Document Processing Configuration
     MAX_CONCURRENT_PROCESSING: int = 3
-    PROCESSING_TIMEOUT: int = 300  # 5 minutes
+    PROCESSING_TIMEOUT: int = 300
     ENABLE_EMBEDDINGS: bool = True
     CACHE_PROCESSED_DOCS: bool = True
 
