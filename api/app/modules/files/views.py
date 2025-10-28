@@ -51,7 +51,7 @@ async def get_files_view(
     current_user: Annotated[User, Depends(get_current_user)],
     request: Request,
 ) -> list[FileResponse]:
-    files = await file_service.get_user_files(current_user.id)
+    files = await file_service.get_files()
     
     file_list = []
     for file in files:

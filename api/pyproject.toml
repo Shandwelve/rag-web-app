@@ -17,6 +17,8 @@ dependencies = [
     "workos>=5.31.2",
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
+    "uvicorn==0.35.0",
+    "unstructured[all-docs]>=0.18.15",
 ]
 
 [tool.setuptools.packages.find]

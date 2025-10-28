@@ -12,6 +12,7 @@ from app.core.exceptions import BaseServiceError
 from app.core.logging import get_logger, setup_logging
 from app.modules.auth.views import router as auth_router
 from app.modules.files.views import router as files_router
+from app.modules.rag.views import router as rag_router
 
 setup_logging()
 logger = get_logger(__name__)
@@ -27,6 +28,7 @@ app.add_middleware(
 
 app.include_router(files_router)
 app.include_router(auth_router)
+app.include_router(rag_router)
 
 
 @app.exception_handler(HTTPException)

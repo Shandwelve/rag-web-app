@@ -51,8 +51,8 @@ class FileService:
     async def get_file(self, file_id: int, user_id: int) -> File | None:
         return await self.file_repository.get_by_id(file_id, user_id)
 
-    async def get_user_files(self, user_id: int) -> Sequence[File]:
-        return await self.file_repository.get_by_user(user_id)
+    async def get_files(self) -> Sequence[File]:
+        return await self.file_repository.get_all()
 
     async def delete_file(self, file_id: int, user_id: int) -> bool:
         file_record = await self.file_repository.get_by_id(file_id, user_id)
@@ -65,7 +65,6 @@ class FileService:
         return await self.file_repository.delete(file_id, user_id)
 
     async def get_file_content(self, file_id: int, user_id: int) -> FileContentResponse | None:
-        """Get file content, original filename, and content type for download."""
         file_record = await self.file_repository.get_by_id(file_id, user_id)
         if not file_record:
             return None
@@ -77,7 +76,6 @@ class FileService:
         async with aiofiles.open(file_path, "rb") as f:
             content = await f.read()
 
-        # Determine content type based on file extension
         content_type, _ = mimetypes.guess_type(file_record.original_filename)
         if not content_type:
             content_type = "application/octet-stream"
