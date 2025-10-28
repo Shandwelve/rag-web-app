@@ -26,5 +26,9 @@ async def ask_voice_question(
     current_user: Annotated[User, Depends(get_current_user)],
     rag_service: Annotated[DocumentService, Depends()]
 ) -> AnswerResponse:
-    return await ...
+    question_request = QuestionRequest(
+        question=request.audio_data,
+        include_images=request.include_images
+    )
+    return await rag_service.process_question(question_request)
 

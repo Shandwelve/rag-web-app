@@ -5,12 +5,10 @@ from pydantic import BaseModel
 
 class QuestionRequest(BaseModel):
     question: str
-    include_images: bool = True
 
 
 class VoiceQuestionRequest(BaseModel):
     audio_data: str
-    include_images: bool = True
 
 
 class SourceReference(BaseModel):
