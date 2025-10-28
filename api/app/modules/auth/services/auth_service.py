@@ -27,32 +27,22 @@ class AuthService:
         self,
         user_repository: Annotated[UserRepository, Depends(UserRepository)],
     ) -> None:
-        self.client = workos.WorkOSClient(
-            api_key=settings.WORKOS_API_KEY, client_id=settings.WORKOS_CLIENT_ID
-        )
+        self.client = workos.WorkOSClient(api_key=settings.WORKOS_API_KEY, client_id=settings.WORKOS_CLIENT_ID)
         self.user_repository = user_repository
 
-    def create_access_token(
-        self, data: dict[str, Any], expires_delta: timedelta | None = None
-    ) -> str:
+    def create_access_token(self, data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
         to_encode = data.copy()
         if expires_delta:
             expire = datetime.now(UTC) + expires_delta
         else:
-            expire = datetime.now(UTC) + timedelta(
-                minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
-            )
+            expire = datetime.now(UTC) + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
         to_encode.update({"exp": expire})
-        encoded_jwt: str = jwt.encode(
-            to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
-        )
+        encoded_jwt: str = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
         return encoded_jwt
 
     def verify_token(self, token: str) -> TokenData:
         try:
-            payload = jwt.decode(
-                token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
-            )
+            payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
             workos_id: str = payload.get("sub")
             if workos_id is None:
                 raise AuthenticationError("Invalid token")
@@ -116,9 +106,7 @@ class AuthService:
             updated_at=created_user.updated_at.isoformat(),
         )
 
-    async def update_user(
-        self, user_id: int, user_data: UserUpdate
-    ) -> UserResponse | None:
+    async def update_user(self, user_id: int, user_data: UserUpdate) -> UserResponse | None:
         user = await self.user_repository.get_by_id(user_id)
         if not user:
             return None
@@ -172,6 +160,4 @@ class AuthService:
             )
             for user in users
         ]
-        return UserListResponse(
-            users=user_responses, total=total, skip=skip, limit=limit
-        )
+        return UserListResponse(users=user_responses, total=total, skip=skip, limit=limit)

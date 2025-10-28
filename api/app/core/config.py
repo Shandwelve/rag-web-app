@@ -27,16 +27,9 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str = ""
     CHROMA_PERSIST_DIRECTORY: str = "chroma_db"
-    EMBEDDING_MODEL: str = "text-embedding-3-small"
     CHAT_MODEL: str = "gpt-4o-mini"
     MAX_TOKENS: int = 1000
-    CHUNK_SIZE: int = 1000
     CHUNK_OVERLAP: int = 200
-
-    MAX_CONCURRENT_PROCESSING: int = 3
-    PROCESSING_TIMEOUT: int = 300
-    ENABLE_EMBEDDINGS: bool = True
-    CACHE_PROCESSED_DOCS: bool = True
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).parent.parent.parent / ".env",

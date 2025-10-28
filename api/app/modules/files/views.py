@@ -26,15 +26,11 @@ async def upload_file_view(
     request: Request,
 ) -> FileResponse:
     if not file.filename:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail="No file provided"
-        )
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="No file provided")
 
     try:
         file_content = await file.read()
-        file_record = await file_service.save_file(
-            file_content, file.filename, current_user.id
-        )
+        file_record = await file_service.save_file(file_content, file.filename, current_user.id)
 
         return FileResponse(
             id=file_record.id,
@@ -108,13 +104,9 @@ async def download_file_view(
     if not file_data:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="File not found")
 
-    headers = {
-        "Content-Disposition": f'attachment; filename="{file_data.original_filename}"'
-    }
+    headers = {"Content-Disposition": f'attachment; filename="{file_data.original_filename}"'}
 
-    return Response(
-        content=file_data.content, media_type=file_data.content_type, headers=headers
-    )
+    return Response(content=file_data.content, media_type=file_data.content_type, headers=headers)
 
 
 @router.delete("/{file_id}")

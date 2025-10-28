@@ -64,9 +64,7 @@ class FileService:
 
         return await self.file_repository.delete(file_id, user_id)
 
-    async def get_file_content(
-        self, file_id: int, user_id: int
-    ) -> FileContentResponse | None:
+    async def get_file_content(self, file_id: int, user_id: int) -> FileContentResponse | None:
         file_record = await self.file_repository.get_by_id(file_id, user_id)
         if not file_record:
             return None

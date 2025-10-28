@@ -1,20 +1,12 @@
 import json
-import logging
-import tempfile
 import time
 from typing import Annotated, Any
 
-import aiofiles
-import openai
 from fastapi import Depends, UploadFile
 
+from app.core.logging import get_logger
 from app.modules.files.repository import FileRepository
 from app.modules.files.schema import FileType
-from app.modules.rag.managers import (
-    OpenAIService,
-    PDFContentManager,
-    VectorStoreManager,
-)
 from app.modules.rag.models import Answer, Question
 from app.modules.rag.repository import QARepository
 from app.modules.rag.schema import (
@@ -27,25 +19,14 @@ from app.modules.rag.schema import (
     RAGResult,
     SourceReference,
 )
+from app.modules.rag.services import (
+    AudioProcessingService,
+    OpenAIService,
+    PDFContentManager,
+    VectorStoreManager,
+)
 
-logger = logging.getLogger(__name__)
-
-
-class AudioProcessingService:
-    async def transcribe_with_openai(
-        self, audio_data: bytes, filename: str = None
-    ) -> tuple[str, dict[str, Any]]:
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-            temp_file.write(audio_data)
-            temp_file.flush()
-
-            async with aiofiles.open(temp_file.name, "rb") as f:
-                transcript = openai.Audio.transcribe("whisper-1", f)
-                transcribed_text = transcript.text.strip()
-
-            metadata = {"provider": "openai", "filename": filename}
-
-            return transcribed_text, metadata
+logger = get_logger(__name__)
 
 
 class DocumentService:
@@ -56,9 +37,7 @@ class DocumentService:
         openai_service: Annotated[OpenAIService, Depends(OpenAIService)],
         files_repository: Annotated[FileRepository, Depends(FileRepository)],
         qa_repository: Annotated[QARepository, Depends(QARepository)],
-        audio_service: Annotated[
-            AudioProcessingService, Depends(AudioProcessingService)
-        ],
+        audio_service: Annotated[AudioProcessingService, Depends(AudioProcessingService)],
     ) -> None:
         self.pdf_manager = pdf_manager
         self.vector_store = vector_store
@@ -68,13 +47,9 @@ class DocumentService:
         self.audio_service = audio_service
         self.processed_files = {}
 
-    async def process_question(
-        self, question: QuestionRequest, user_id: int = 1
-    ) -> AnswerResponse:
+    async def process_question(self, question: QuestionRequest, user_id: int = 1) -> AnswerResponse:
         start_time = time.time()
-        logger.info(
-            f"Processing question for user {user_id}: {question.question[:100]}..."
-        )
+        logger.info(f"Processing question for user {user_id}: {question.question[:100]}...")
 
         question_record = await self._create_question_record(question, user_id)
 
@@ -82,13 +57,9 @@ class DocumentService:
             rag_result = await self._process_rag_query(question.question)
             processing_time = self._calculate_processing_time(start_time)
 
-            await self._create_answer_record(
-                question_record.id, rag_result, processing_time
-            )
+            await self._create_answer_record(question_record.id, rag_result, processing_time)
 
-            logger.info(
-                f"Successfully processed question {question_record.id} in {processing_time}ms"
-            )
+            logger.info(f"Successfully processed question {question_record.id} in {processing_time}ms")
             return self._build_response(question_record.id, rag_result)
 
         except Exception as e:
@@ -96,15 +67,11 @@ class DocumentService:
             error_result = self._create_error_result(str(e))
 
             logger.error(f"Error processing question {question_record.id}: {str(e)}")
-            await self._create_answer_record(
-                question_record.id, error_result, processing_time
-            )
+            await self._create_answer_record(question_record.id, error_result, processing_time)
 
             return self._build_response(question_record.id, error_result)
 
-    async def _create_question_record(
-        self, question: QuestionRequest, user_id: int
-    ) -> Question:
+    async def _create_question_record(self, question: QuestionRequest, user_id: int) -> Question:
         return await self.qa_repository.create_question(
             QuestionCreate(
                 question_text=question.question,
@@ -147,9 +114,7 @@ class DocumentService:
             "confidence_score": 0.0,
         }
 
-    async def _generate_rag_response(
-        self, question_text: str, search_results: list
-    ) -> RAGResult:
+    async def _generate_rag_response(self, question_text: str, search_results: list) -> RAGResult:
         context = self._build_context(search_results)
         answer_text = self.openai_service.generate_answer(question_text, context)
         sources = self._build_sources(search_results)
@@ -174,9 +139,7 @@ class DocumentService:
     def _calculate_processing_time(self, start_time: float) -> int:
         return int((time.time() - start_time) * 1000)
 
-    async def _create_answer_record(
-        self, question_id: int, rag_result: dict, processing_time: int
-    ) -> Answer:
+    async def _create_answer_record(self, question_id: int, rag_result: dict, processing_time: int) -> Answer:
         return await self.qa_repository.create_answer(
             AnswerCreate(
                 answer_text=rag_result["answer_text"],
@@ -232,10 +195,8 @@ class DocumentService:
 
         try:
             audio_data = await audio_file.read()
-            transcribed_text, audio_metadata = (
-                await self.audio_service.transcribe_with_openai(
-                    audio_data, audio_file.filename
-                )
+            transcribed_text, audio_metadata = await self.audio_service.transcribe_with_openai(
+                audio_data, audio_file.filename
             )
 
             logger.info(f"Transcribed audio: '{transcribed_text[:100]}...'")
@@ -249,20 +210,14 @@ class DocumentService:
 
             rag_result["audio_metadata"] = audio_metadata
 
-            await self._create_answer_record(
-                question_record.id, rag_result, processing_time
-            )
+            await self._create_answer_record(question_record.id, rag_result, processing_time)
 
-            logger.info(
-                f"Successfully processed audio question {question_record.id} in {processing_time}ms"
-            )
+            logger.info(f"Successfully processed audio question {question_record.id} in {processing_time}ms")
             return self._build_response(question_record.id, rag_result)
 
         except Exception as e:
             processing_time = self._calculate_processing_time(start_time)
-            error_result = self._create_error_result(
-                f"Audio processing failed: {str(e)}"
-            )
+            error_result = self._create_error_result(f"Audio processing failed: {str(e)}")
 
             logger.error(f"Error processing audio question: {str(e)}")
 
@@ -270,9 +225,7 @@ class DocumentService:
                 question_record = await self._create_audio_question_record(
                     f"[Audio processing failed: {str(e)}]", user_id, session_id, {}
                 )
-                await self._create_answer_record(
-                    question_record.id, error_result, processing_time
-                )
+                await self._create_answer_record(question_record.id, error_result, processing_time)
                 return self._build_response(question_record.id, error_result)
             except Exception:
                 return AnswerResponse(
@@ -320,11 +273,7 @@ class DocumentService:
                             if hasattr(img_b64, "metadata")
                             else None
                         )
-                        if (
-                            page_number is None
-                            or img_page is None
-                            or page_number == img_page
-                        ):
+                        if page_number is None or img_page is None or page_number == img_page:
                             chunk_images[i].append(img_b64)
 
                 self.processed_files[file.id] = {
@@ -344,9 +293,7 @@ class DocumentService:
                                 "file_id": file.id,
                                 "filename": file.original_filename,
                                 "chunk_index": i,
-                                "page_number": getattr(
-                                    text.metadata, "page_number", None
-                                ),
+                                "page_number": getattr(text.metadata, "page_number", None),
                             },
                         }
                     )
@@ -361,14 +308,10 @@ class DocumentService:
     def _build_context(self, search_results: list[dict[str, Any]]) -> str:
         context_parts = []
         for result in search_results:
-            context_parts.append(
-                f"Source: {result['metadata'].get('filename', 'Unknown')}\n{result['text']}\n"
-            )
+            context_parts.append(f"Source: {result['metadata'].get('filename', 'Unknown')}\n{result['text']}\n")
         return "\n".join(context_parts)
 
-    def _build_sources(
-        self, search_results: list[dict[str, Any]]
-    ) -> list[SourceReference]:
+    def _build_sources(self, search_results: list[dict[str, Any]]) -> list[SourceReference]:
         sources = []
         for result in search_results:
             metadata = result["metadata"]
@@ -383,9 +326,7 @@ class DocumentService:
             )
         return sources
 
-    async def _build_images(
-        self, search_results: list[dict[str, Any]]
-    ) -> list[ImageReference]:
+    async def _build_images(self, search_results: list[dict[str, Any]]) -> list[ImageReference]:
         images = []
 
         for result in search_results:
