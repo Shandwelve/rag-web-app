@@ -22,6 +22,7 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 from app.modules.users.models import *
 from app.modules.files.models import *
+from app.modules.rag.models import *
 from app.core.models import BaseModel
 
 target_metadata = BaseModel.metadata

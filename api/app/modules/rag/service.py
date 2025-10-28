@@ -1,109 +1,253 @@
-from typing import Annotated, Any
+from typing import Annotated, Any, Dict, List
+import json
+import time
+import logging
 
 from fastapi import Depends
 
 from app.modules.files.repository import FileRepository
 from app.modules.files.schema import FileType
-from app.modules.rag.managers import PDFContentManager, VectorStoreManager, OpenAIService
-from app.modules.rag.schema import QuestionRequest, AnswerResponse, SourceReference, ImageReference
+from app.modules.rag.managers import (
+    PDFContentManager,
+    VectorStoreManager,
+    OpenAIService,
+)
+from app.modules.rag.schema import (
+    QuestionRequest,
+    AnswerResponse,
+    SourceReference,
+    ImageReference,
+    QuestionCreate,
+    AnswerCreate,
+)
+from app.modules.rag.repository import QARepository
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentService:
-    def __init__(self,
-                 pdf_manager: Annotated[PDFContentManager, Depends(PDFContentManager)],
-                 vector_store: Annotated[VectorStoreManager, Depends(VectorStoreManager)],
-                 openai_service: Annotated[OpenAIService, Depends(OpenAIService)],
-                 files_repository: Annotated[FileRepository, Depends(FileRepository)]
-                 ) -> None:
+    def __init__(
+        self,
+        pdf_manager: Annotated[PDFContentManager, Depends(PDFContentManager)],
+        vector_store: Annotated[VectorStoreManager, Depends(VectorStoreManager)],
+        openai_service: Annotated[OpenAIService, Depends(OpenAIService)],
+        files_repository: Annotated[FileRepository, Depends(FileRepository)],
+        qa_repository: Annotated[QARepository, Depends(QARepository)],
+    ) -> None:
         self.pdf_manager = pdf_manager
         self.vector_store = vector_store
         self.openai_service = openai_service
         self.files_repository = files_repository
+        self.qa_repository = qa_repository
         self.processed_files = {}
 
-    async def process_question(self, question: QuestionRequest) -> AnswerResponse:
-        files = await self.files_repository.get_all()
-        pdf_files = [file for file in files if file.file_type == FileType.PDF]
-        
+    async def process_question(
+        self, question: QuestionRequest, user_id: int = 1
+    ) -> AnswerResponse:
+        start_time = time.time()
+        logger.info(
+            f"Processing question for user {user_id}: {question.question[:100]}..."
+        )
+
+        question_record = await self._create_question_record(question, user_id)
+
+        try:
+            rag_result = await self._process_rag_query(question.question)
+            processing_time = self._calculate_processing_time(start_time)
+
+            await self._create_answer_record(
+                question_record.id, rag_result, processing_time
+            )
+
+            logger.info(
+                f"Successfully processed question {question_record.id} in {processing_time}ms"
+            )
+            return self._build_response(question_record.id, rag_result)
+
+        except Exception as e:
+            processing_time = self._calculate_processing_time(start_time)
+            error_result = self._create_error_result(str(e))
+
+            logger.error(f"Error processing question {question_record.id}: {str(e)}")
+            await self._create_answer_record(
+                question_record.id, error_result, processing_time
+            )
+
+            return self._build_response(question_record.id, error_result)
+
+    async def _create_question_record(self, question: QuestionRequest, user_id: int):
+        return await self.qa_repository.create_question(
+            QuestionCreate(
+                question_text=question.question,
+                user_id=user_id,
+                session_id=question.session_id,
+            )
+        )
+
+    async def _process_rag_query(self, question_text: str) -> dict:
+        pdf_files = await self._get_available_pdf_files()
+
         if not pdf_files:
-            return AnswerResponse(
-                answer="No PDF documents available for processing.",
-                sources=[],
-                images=[],
-                confidence_score=0.0,
-                question_id=0
-            )
-        
+            return self._create_no_documents_result()
+
         await self._process_documents(pdf_files)
-        
-        search_results = self.vector_store.search(question.question, n_results=5)
-        
+        search_results = self.vector_store.search(question_text, n_results=5)
+
         if not search_results:
-            return AnswerResponse(
-                answer="No relevant information found in the documents.",
-                sources=[],
-                images=[],
-                confidence_score=0.0,
-                question_id=0
-            )
-        
+            return self._create_no_results_result()
+
+        return await self._generate_rag_response(question_text, search_results)
+
+    async def _get_available_pdf_files(self) -> list:
+        files = await self.files_repository.get_all()
+        return [file for file in files if file.file_type == FileType.PDF]
+
+    def _create_no_documents_result(self) -> dict:
+        return {
+            "answer_text": "No PDF documents available for processing.",
+            "sources": [],
+            "images": [],
+            "confidence_score": 0.0,
+        }
+
+    def _create_no_results_result(self) -> dict:
+        return {
+            "answer_text": "No relevant information found in the documents.",
+            "sources": [],
+            "images": [],
+            "confidence_score": 0.0,
+        }
+
+    async def _generate_rag_response(
+        self, question_text: str, search_results: list
+    ) -> dict:
         context = self._build_context(search_results)
-        answer = self.openai_service.generate_answer(question.question, context)
-        
+        answer_text = self.openai_service.generate_answer(question_text, context)
         sources = self._build_sources(search_results)
         images = await self._build_images(search_results)
-        
         confidence_score = self._calculate_confidence(search_results)
-        
-        return AnswerResponse(
-            answer=answer,
-            sources=sources,
-            images=images,
-            confidence_score=confidence_score,
-            question_id=hash(question.question) % 1000000
+
+        return {
+            "answer_text": answer_text,
+            "sources": sources,
+            "images": images,
+            "confidence_score": confidence_score,
+        }
+
+    def _create_error_result(self, error_message: str) -> dict:
+        return {
+            "answer_text": f"An error occurred while processing your question: {error_message}",
+            "sources": [],
+            "images": [],
+            "confidence_score": 0.0,
+        }
+
+    def _calculate_processing_time(self, start_time: float) -> int:
+        return int((time.time() - start_time) * 1000)
+
+    async def _create_answer_record(
+        self, question_id: int, rag_result: dict, processing_time: int
+    ):
+        return await self.qa_repository.create_answer(
+            AnswerCreate(
+                answer_text=rag_result["answer_text"],
+                question_id=question_id,
+                confidence_score=rag_result["confidence_score"],
+                sources_used=self._serialize_sources(rag_result["sources"]),
+                images_used=self._serialize_images(rag_result["images"]),
+                processing_time_ms=processing_time,
+            )
         )
+
+    def _serialize_sources(self, sources: list) -> str | None:
+        return json.dumps([s.model_dump() for s in sources]) if sources else None
+
+    def _serialize_images(self, images: list) -> str | None:
+        return json.dumps([i.model_dump() for i in images]) if images else None
+
+    def _build_response(self, question_id: int, rag_result: dict) -> AnswerResponse:
+        return AnswerResponse(
+            answer=rag_result["answer_text"],
+            sources=rag_result["sources"],
+            images=rag_result["images"],
+            confidence_score=rag_result["confidence_score"],
+            question_id=question_id,
+        )
+
+    async def get_question_history(self, user_id: int, limit: int = 50) -> List[Dict]:
+        qa_pairs = await self.qa_repository.get_qa_pairs_by_user(user_id, limit)
+        return [{"question": qa_pair[0], "answer": qa_pair[1]} for qa_pair in qa_pairs]
+
+    async def get_session_history(self, session_id: str) -> List[Dict]:
+        questions = await self.qa_repository.get_questions_by_session(session_id)
+        qa_pairs = []
+
+        for question in questions:
+            answers = await self.qa_repository.get_answers_by_question_id(question.id)
+            if answers:
+                qa_pairs.append({"question": question, "answer": answers[0]})
+
+        return qa_pairs
+
+    async def delete_question(self, question_id: int) -> bool:
+        return await self.qa_repository.delete_question(question_id)
+
+    async def get_user_stats(self, user_id: int) -> Dict:
+        return await self.qa_repository.get_question_stats(user_id)
 
     async def _process_documents(self, files: list[Any]) -> None:
         for file in files:
             if file.id in self.processed_files:
                 continue
-                
+
             try:
                 texts, images = self.pdf_manager.process(file.file_path)
-                
+
                 chunk_images = {}
                 for i, text in enumerate(texts):
-                    page_number = getattr(text.metadata, 'page_number', None)
+                    page_number = getattr(text.metadata, "page_number", None)
                     chunk_images[i] = []
-                    
+
                     for img_b64 in images:
-                        img_page = getattr(img_b64, 'metadata', {}).get('page_number', None) if hasattr(img_b64, 'metadata') else None
-                        if page_number is None or img_page is None or page_number == img_page:
+                        img_page = (
+                            getattr(img_b64, "metadata", {}).get("page_number", None)
+                            if hasattr(img_b64, "metadata")
+                            else None
+                        )
+                        if (
+                            page_number is None
+                            or img_page is None
+                            or page_number == img_page
+                        ):
                             chunk_images[i].append(img_b64)
-                
+
                 self.processed_files[file.id] = {
                     "texts": texts,
                     "chunk_images": chunk_images,
-                    "filename": file.filename
+                    "filename": file.original_filename,
                 }
-                
+
                 documents = []
                 for i, text in enumerate(texts):
                     doc_id = f"{file.id}_{i}"
-                    documents.append({
-                        "id": doc_id,
-                        "text": str(text),
-                        "metadata": {
-                            "file_id": file.id,
-                            "filename": file.filename,
-                            "chunk_index": i,
-                            "page_number": getattr(text.metadata, 'page_number', None)
+                    documents.append(
+                        {
+                            "id": doc_id,
+                            "text": str(text),
+                            "metadata": {
+                                "file_id": file.id,
+                                "filename": file.original_filename,
+                                "chunk_index": i,
+                                "page_number": getattr(
+                                    text.metadata, "page_number", None
+                                ),
+                            },
                         }
-                    })
-                
+                    )
+
                 if documents:
                     self.vector_store.add_documents(documents)
-                    
+
             except Exception as e:
                 print(f"Error processing file {file.filename}: {str(e)}")
                 continue
@@ -111,51 +255,60 @@ class DocumentService:
     def _build_context(self, search_results: list[dict[str, Any]]) -> str:
         context_parts = []
         for result in search_results:
-            context_parts.append(f"Source: {result['metadata'].get('filename', 'Unknown')}\n{result['text']}\n")
+            context_parts.append(
+                f"Source: {result['metadata'].get('filename', 'Unknown')}\n{result['text']}\n"
+            )
         return "\n".join(context_parts)
 
-    def _build_sources(self, search_results: list[dict[str, Any]]) -> list[SourceReference]:
+    def _build_sources(
+        self, search_results: list[dict[str, Any]]
+    ) -> list[SourceReference]:
         sources = []
         for result in search_results:
-            metadata = result['metadata']
-            sources.append(SourceReference(
-                file_id=metadata.get('file_id', 0),
-                filename=metadata.get('filename', 'Unknown'),
-                page_number=metadata.get('page_number'),
-                chunk_index=metadata.get('chunk_index', 0),
-                relevance_score=1.0 - result.get('distance', 0.0)
-            ))
+            metadata = result["metadata"]
+            sources.append(
+                SourceReference(
+                    file_id=metadata.get("file_id", 0),
+                    filename=metadata.get("filename", "Unknown"),
+                    page_number=metadata.get("page_number"),
+                    chunk_index=metadata.get("chunk_index", 0),
+                    relevance_score=1.0 - result.get("distance", 0.0),
+                )
+            )
         return sources
 
-    async def _build_images(self, search_results: list[dict[str, Any]]) -> list[ImageReference]:
+    async def _build_images(
+        self, search_results: list[dict[str, Any]]
+    ) -> list[ImageReference]:
         images = []
-        
+
         for result in search_results:
-            metadata = result['metadata']
-            file_id = metadata.get('file_id')
-            chunk_index = metadata.get('chunk_index')
-            
+            metadata = result["metadata"]
+            file_id = metadata.get("file_id")
+            chunk_index = metadata.get("chunk_index")
+
             if file_id in self.processed_files:
                 file_data = self.processed_files[file_id]
-                chunk_images = file_data.get('chunk_images', {})
-                filename = file_data['filename']
-                
+                chunk_images = file_data.get("chunk_images", {})
+                filename = file_data["filename"]
+
                 if chunk_index in chunk_images:
                     for img_b64 in chunk_images[chunk_index]:
-                        images.append(ImageReference(
-                            image_path=f"data:image/png;base64,{img_b64}",
-                            description=f"Image from {filename} (chunk {chunk_index})",
-                            page_number=metadata.get('page_number'),
-                            file_id=file_id
-                        ))
-        
+                        images.append(
+                            ImageReference(
+                                image_path=f"data:image/png;base64,{img_b64}",
+                                description=f"Image from {filename} (chunk {chunk_index})",
+                                page_number=metadata.get("page_number"),
+                                file_id=file_id,
+                            )
+                        )
+
         return images[:5]
 
     def _calculate_confidence(self, search_results: list[dict[str, Any]]) -> float:
         if not search_results:
             return 0.0
-        
-        distances = [result.get('distance', 1.0) for result in search_results]
+
+        distances = [result.get("distance", 1.0) for result in search_results]
         avg_distance = sum(distances) / len(distances)
         return max(0.0, min(1.0, 1.0 - avg_distance))
-

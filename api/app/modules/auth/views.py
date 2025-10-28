@@ -8,7 +8,15 @@ from app.modules.auth.exceptions import AuthenticationError
 from app.modules.auth.middleware import get_current_user, get_current_admin_user
 from app.modules.auth.models import User
 from app.modules.auth.repository import UserRepository
-from app.modules.auth.schema import LoginResponse, Token, UserInfo, UserCreate, UserUpdate, UserResponse, UserListResponse
+from app.modules.auth.schema import (
+    LoginResponse,
+    Token,
+    UserInfo,
+    UserCreate,
+    UserUpdate,
+    UserResponse,
+    UserListResponse,
+)
 from app.modules.auth.service import AuthService
 from app.modules.auth.state_manager import StateManager
 
@@ -70,7 +78,9 @@ async def refresh_token(
         user = await user_repository.get_by_workos_id(token_data.workos_id)
 
         if user is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
+            )
 
         new_token = auth_service.create_access_token(data={"sub": user.workos_id})
         return Token(access_token=new_token, token_type="bearer")
@@ -108,7 +118,9 @@ async def get_user(
 ) -> UserResponse:
     user = await auth_service.get_user(user_id)
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
     return user
 
 
@@ -122,7 +134,9 @@ async def update_user(
     try:
         user = await auth_service.update_user(user_id, user_data)
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
         return user
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -136,5 +150,7 @@ async def delete_user(
 ) -> MessageResponse:
     success = await auth_service.delete_user(user_id)
     if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
     return MessageResponse(message="User deleted successfully")

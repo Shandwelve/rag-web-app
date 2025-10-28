@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     MAX_TOKENS: int = 1000
     CHUNK_SIZE: int = 1000
     CHUNK_OVERLAP: int = 200
-    
+
     # Document Processing Configuration
     MAX_CONCURRENT_PROCESSING: int = 3
     PROCESSING_TIMEOUT: int = 300  # 5 minutes

@@ -10,7 +10,16 @@ from app.core.config import settings
 from app.modules.auth.exceptions import AuthenticationError
 from app.modules.auth.models import User
 from app.modules.auth.repository import UserRepository
-from app.modules.auth.schema import Token, TokenData, UserRole, WorkOSUser, UserCreate, UserUpdate, UserResponse, UserListResponse
+from app.modules.auth.schema import (
+    Token,
+    TokenData,
+    UserRole,
+    WorkOSUser,
+    UserCreate,
+    UserUpdate,
+    UserResponse,
+    UserListResponse,
+)
 
 
 class AuthService:
@@ -18,22 +27,32 @@ class AuthService:
         self,
         user_repository: Annotated[UserRepository, Depends(UserRepository)],
     ) -> None:
-        self.client = workos.WorkOSClient(api_key=settings.WORKOS_API_KEY, client_id=settings.WORKOS_CLIENT_ID)
+        self.client = workos.WorkOSClient(
+            api_key=settings.WORKOS_API_KEY, client_id=settings.WORKOS_CLIENT_ID
+        )
         self.user_repository = user_repository
 
-    def create_access_token(self, data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
+    def create_access_token(
+        self, data: dict[str, Any], expires_delta: timedelta | None = None
+    ) -> str:
         to_encode = data.copy()
         if expires_delta:
             expire = datetime.now(UTC) + expires_delta
         else:
-            expire = datetime.now(UTC) + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+            expire = datetime.now(UTC) + timedelta(
+                minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+            )
         to_encode.update({"exp": expire})
-        encoded_jwt: str = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+        encoded_jwt: str = jwt.encode(
+            to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+        )
         return encoded_jwt
 
     def verify_token(self, token: str) -> TokenData:
         try:
-            payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+            payload = jwt.decode(
+                token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+            )
             workos_id: str = payload.get("sub")
             if workos_id is None:
                 raise AuthenticationError("Invalid token")
@@ -85,12 +104,8 @@ class AuthService:
         existing_user = await self.user_repository.get_by_email(user_data.email)
         if existing_user:
             raise ValueError("User with this email already exists")
-        
-        user = User(
-            email=user_data.email,
-            role=user_data.role,
-            workos_id=None
-        )
+
+        user = User(email=user_data.email, role=user_data.role, workos_id=None)
         created_user = await self.user_repository.create(user)
         return UserResponse(
             id=created_user.id,
@@ -98,23 +113,25 @@ class AuthService:
             email=created_user.email,
             role=created_user.role,
             created_at=created_user.created_at.isoformat(),
-            updated_at=created_user.updated_at.isoformat()
+            updated_at=created_user.updated_at.isoformat(),
         )
 
-    async def update_user(self, user_id: int, user_data: UserUpdate) -> UserResponse | None:
+    async def update_user(
+        self, user_id: int, user_data: UserUpdate
+    ) -> UserResponse | None:
         user = await self.user_repository.get_by_id(user_id)
         if not user:
             return None
-        
+
         if user_data.email is not None:
             existing_user = await self.user_repository.get_by_email(user_data.email)
             if existing_user and existing_user.id != user_id:
                 raise ValueError("User with this email already exists")
             user.email = user_data.email
-        
+
         if user_data.role is not None:
             user.role = user_data.role
-        
+
         updated_user = await self.user_repository.update(user)
         return UserResponse(
             id=updated_user.id,
@@ -122,7 +139,7 @@ class AuthService:
             email=updated_user.email,
             role=updated_user.role,
             created_at=updated_user.created_at.isoformat(),
-            updated_at=updated_user.updated_at.isoformat()
+            updated_at=updated_user.updated_at.isoformat(),
         )
 
     async def delete_user(self, user_id: int) -> bool:
@@ -132,14 +149,14 @@ class AuthService:
         user = await self.user_repository.get_by_id(user_id)
         if not user:
             return None
-        
+
         return UserResponse(
             id=user.id,
             workos_id=user.workos_id,
             email=user.email,
             role=user.role,
             created_at=user.created_at.isoformat(),
-            updated_at=user.updated_at.isoformat()
+            updated_at=user.updated_at.isoformat(),
         )
 
     async def get_users(self, skip: int = 0, limit: int = 100) -> UserListResponse:
@@ -151,13 +168,10 @@ class AuthService:
                 email=user.email,
                 role=user.role,
                 created_at=user.created_at.isoformat(),
-                updated_at=user.updated_at.isoformat()
+                updated_at=user.updated_at.isoformat(),
             )
             for user in users
         ]
         return UserListResponse(
-            users=user_responses,
-            total=total,
-            skip=skip,
-            limit=limit
+            users=user_responses, total=total, skip=skip, limit=limit
         )

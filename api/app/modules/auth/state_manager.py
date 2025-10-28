@@ -16,7 +16,9 @@ class StateManager:
         timestamp = str(int(time.time()))
         payload = f"{random_state}:{timestamp}"
 
-        signature = hmac.new(self._state_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        signature = hmac.new(
+            self._state_secret.encode(), payload.encode(), hashlib.sha256
+        ).hexdigest()
         state = f"{signature}:{payload}"
 
         return state
@@ -32,7 +34,9 @@ class StateManager:
 
             signature, random_state, timestamp = parts
             payload = f"{random_state}:{timestamp}"
-            expected_signature = hmac.new(self._state_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+            expected_signature = hmac.new(
+                self._state_secret.encode(), payload.encode(), hashlib.sha256
+            ).hexdigest()
 
             if not hmac.compare_digest(signature, expected_signature):
                 return False

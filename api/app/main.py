@@ -49,7 +49,9 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 
 @app.exception_handler(BaseServiceError)
-async def service_exception_handler(request: Request, exc: BaseServiceError) -> JSONResponse:
+async def service_exception_handler(
+    request: Request, exc: BaseServiceError
+) -> JSONResponse:
     logger.error(f"Service error occurred: {str(exc)}")
     safe_content = {
         "message": "A service error occurred.",

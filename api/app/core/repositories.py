@@ -8,5 +8,7 @@ from app.core.database import get_db_session
 
 
 class Repository(ABC):
-    def __init__(self, session: Annotated[AsyncSession, Depends(get_db_session)]) -> None:
+    def __init__(
+        self, session: Annotated[AsyncSession, Depends(get_db_session)]
+    ) -> None:
         self._session = session

@@ -55,11 +55,14 @@ class UserRepository(Repository):
 
     async def count(self) -> int:
         from sqlmodel import func
+
         statement = select(func.count(User.id))
         result = await self._session.exec(statement)
         return result.first() or 0
 
-    async def get_all_paginated(self, skip: int = 0, limit: int = 100) -> tuple[Sequence[User], int]:
+    async def get_all_paginated(
+        self, skip: int = 0, limit: int = 100
+    ) -> tuple[Sequence[User], int]:
         users = await self.get_all(skip, limit)
         total = await self.count()
         return users, total

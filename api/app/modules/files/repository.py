@@ -14,12 +14,16 @@ class FileRepository(Repository):
         return file_record
 
     async def get_by_id(self, file_id: int, user_id: int) -> File | None:
-        result = await self._session.exec(select(File).where(File.id == file_id, File.user_id == user_id))
+        result = await self._session.exec(
+            select(File).where(File.id == file_id, File.user_id == user_id)
+        )
         return result.first()
 
     async def get_by_hash(self, content_hash: str, user_id: int) -> File | None:
         result = await self._session.exec(
-            select(File).where(File.content_hash == content_hash, File.user_id == user_id)
+            select(File).where(
+                File.content_hash == content_hash, File.user_id == user_id
+            )
         )
         return result.first()
 
