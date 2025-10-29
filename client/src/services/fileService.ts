@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"
+import { apiFetch } from '@/utils/api'
 
 export interface FileItem {
   id: number
@@ -11,19 +11,13 @@ export interface FileItem {
   error_message?: string
 }
 
-const getAuthHeaders = (): HeadersInit => {
-  const token = localStorage.getItem('auth_token')
-  return token ? { 'Authorization': `Bearer ${token}` } : {}
-}
-
 export class FileService {
   static async uploadFile(file: File): Promise<FileItem> {
     const formData = new FormData()
     formData.append("file", file)
 
-    const response = await fetch(`${API_BASE_URL}/files/upload`, {
+    const response = await apiFetch('/files/upload', {
       method: "POST",
-      headers: getAuthHeaders(),
       body: formData,
     })
 
@@ -35,9 +29,7 @@ export class FileService {
   }
 
   static async getFiles(): Promise<FileItem[]> {
-    const response = await fetch(`${API_BASE_URL}/files/`, {
-      headers: getAuthHeaders(),
-    })
+    const response = await apiFetch('/files/')
 
     if (!response.ok) {
       throw new Error(`Failed to fetch files: ${response.statusText}`)
@@ -47,9 +39,7 @@ export class FileService {
   }
 
   static async getFile(fileId: number): Promise<FileItem> {
-    const response = await fetch(`${API_BASE_URL}/files/${fileId}`, {
-      headers: getAuthHeaders(),
-    })
+    const response = await apiFetch(`/files/${fileId}`)
 
     if (!response.ok) {
       throw new Error(`Failed to fetch file: ${response.statusText}`)
@@ -59,9 +49,8 @@ export class FileService {
   }
 
   static async deleteFile(fileId: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/files/${fileId}`, {
+    const response = await apiFetch(`/files/${fileId}`, {
       method: "DELETE",
-      headers: getAuthHeaders(),
     })
 
     if (!response.ok) {

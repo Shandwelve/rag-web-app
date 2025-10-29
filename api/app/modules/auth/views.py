@@ -1,8 +1,10 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import RedirectResponse
 from workos.types.sso import SsoProviderType
 
+from app.core.config import settings
 from app.core.schema import MessageResponse
 from app.modules.auth.exceptions import AuthenticationError
 from app.modules.auth.middleware import get_current_admin_user, get_current_user
@@ -11,6 +13,7 @@ from app.modules.auth.repository import UserRepository
 from app.modules.auth.schema import (
     LoginResponse,
     Token,
+    TokenExchangeRequest,
     UserCreate,
     UserInfo,
     UserListResponse,
@@ -38,17 +41,30 @@ async def login(
 async def callback(
     code: str,
     state: str,
+    state_manager: Annotated[StateManager, Depends(StateManager)],
+) -> RedirectResponse:
+    if not state_manager.validate_state(state):
+        error_url = f"{settings.FRONTEND_URL}?error=invalid_state"
+        return RedirectResponse(url=error_url)
+
+    redirect_url = f"{settings.FRONTEND_URL}?code={code}&state={state}"
+    return RedirectResponse(url=redirect_url)
+
+
+@router.post("/exchange")
+async def exchange_token(
+    request: TokenExchangeRequest,
     auth_service: Annotated[AuthService, Depends(AuthService)],
     state_manager: Annotated[StateManager, Depends(StateManager)],
 ) -> Token:
     try:
-        if not state_manager.validate_state(state):
+        if not state_manager.validate_state(request.state):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid or expired state parameter",
             )
 
-        workos_user = auth_service.get_user_info(code)
+        workos_user = auth_service.get_user_info(request.code)
         token = await auth_service.authenticate_user(workos_user)
         return token
     except AuthenticationError as e:

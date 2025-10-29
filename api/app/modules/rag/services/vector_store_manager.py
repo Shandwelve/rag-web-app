@@ -22,7 +22,13 @@ class VectorStoreManager:
             logger.info("ChromaDB collection 'documents' initialized successfully")
             
             logger.debug("Loading embedding model: all-MiniLM-L6-v2")
-            self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+            try:
+                self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+            except Exception as model_error:
+                logger.warning(f"Failed to load model with device specification: {model_error}, trying without device")
+                import torch
+                torch.set_default_device("cpu")
+                self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
             logger.info("Embedding model loaded successfully")
         except Exception as e:
             logger.error(f"Error initializing VectorStoreManager: {str(e)}", exc_info=True)

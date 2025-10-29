@@ -1,98 +1,156 @@
-import React, { useState, useEffect } from 'react'
-import { useAuth } from '../contexts/AuthContext'
-import { Button } from './ui/button'
+import { useState, useEffect } from 'react'
+import { Users, Trash2, Edit } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { UserService, type User } from '@/services/userService'
 
-interface AdminStats {
-  totalUsers: number
-  totalFiles: number
-  recentActivity: Array<{
-    id: number
-    action: string
-    user: string
-    timestamp: string
-  }>
-}
-
-export const AdminPanel: React.FC = () => {
-  const { user } = useAuth()
-  const [stats, setStats] = useState<AdminStats | null>(null)
+export function AdminPanel() {
+  const [users, setUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editEmail, setEditEmail] = useState('')
+  const [editRole, setEditRole] = useState<'user' | 'admin'>('user')
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/admin/stats`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-          },
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setStats(data)
-        }
-      } catch (error) {
-        console.error('Failed to fetch admin stats:', error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
+    fetchUsers()
+  }, [])
 
-    if (user?.role === 'admin') {
-      fetchStats()
+  const fetchUsers = async () => {
+    setIsLoading(true)
+    try {
+      const response = await UserService.getUsers()
+      setUsers(response.users)
+    } catch (error) {
+      console.error('Error fetching users:', error)
+    } finally {
+      setIsLoading(false)
     }
-  }, [user])
-
-  if (user?.role !== 'admin') {
-    return null
   }
 
-  if (isLoading) {
-    return (
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-semibold mb-4">Admin Panel</h2>
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-        </div>
-      </div>
-    )
+  const handleDelete = async (userId: number) => {
+    if (!confirm('Are you sure you want to delete this user?')) return
+    
+    try {
+      await UserService.deleteUser(userId)
+      setUsers(prev => prev.filter(u => u.id !== userId))
+    } catch (error) {
+      console.error('Error deleting user:', error)
+      alert('Failed to delete user')
+    }
+  }
+
+  const handleEdit = (user: User) => {
+    setEditingId(user.id)
+    setEditEmail(user.email || '')
+    setEditRole(user.role)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return
+
+    try {
+      const updated = await UserService.updateUser(editingId, editEmail, editRole)
+      setUsers(prev => prev.map(u => u.id === editingId ? updated : u))
+      setEditingId(null)
+      setEditEmail('')
+      setEditRole('user')
+    } catch (error) {
+      console.error('Error updating user:', error)
+      alert('Failed to update user')
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingId(null)
+    setEditEmail('')
+    setEditRole('user')
   }
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow">
-      <h2 className="text-xl font-semibold mb-4">Admin Panel</h2>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <h3 className="text-lg font-medium text-blue-900">Total Users</h3>
-          <p className="text-3xl font-bold text-blue-600">
-            {stats?.totalUsers || 0}
-          </p>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              User Management
+            </CardTitle>
+            <CardDescription>Manage users and their roles</CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={fetchUsers} disabled={isLoading}>
+            Refresh
+          </Button>
         </div>
-        
-        <div className="bg-green-50 p-4 rounded-lg">
-          <h3 className="text-lg font-medium text-green-900">Total Files</h3>
-          <p className="text-3xl font-bold text-green-600">
-            {stats?.totalFiles || 0}
-          </p>
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-lg font-medium mb-4">Recent Activity</h3>
-        <div className="space-y-2">
-          {stats?.recentActivity?.length ? (
-            stats.recentActivity.map((activity) => (
-              <div key={activity.id} className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                <span className="text-sm">{activity.action} by {activity.user}</span>
-                <span className="text-xs text-gray-500">{activity.timestamp}</span>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map(i => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {users.map((user) => (
+              <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
+                {editingId === user.id ? (
+                  <div className="flex-1 flex items-center gap-4">
+                    <Input
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      placeholder="Email"
+                      className="flex-1"
+                    />
+                    <select
+                      value={editRole}
+                      onChange={(e) => setEditRole(e.target.value as 'user' | 'admin')}
+                      className="px-3 py-2 border rounded-md"
+                    >
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <Button size="sm" onClick={handleSaveEdit}>Save</Button>
+                    <Button size="sm" variant="outline" onClick={handleCancelEdit}>Cancel</Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{user.email || 'No email'}</p>
+                        <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
+                          {user.role}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Created: {new Date(user.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(user)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(user.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
-            ))
-          ) : (
-            <p className="text-gray-500 text-sm">No recent activity</p>
-          )}
-        </div>
-      </div>
-    </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

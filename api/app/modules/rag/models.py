@@ -4,6 +4,8 @@ from app.core.models import BaseModel
 
 
 class Question(BaseModel, table=True):
+    __tablename__ = "questions"
+    
     question_text: str = Field(nullable=False, index=True)
     user_id: int = Field(foreign_key="user.id", nullable=False)
     session_id: str | None = Field(nullable=True, index=True)
@@ -13,6 +15,8 @@ class Question(BaseModel, table=True):
 
 
 class Answer(BaseModel, table=True):
+    __tablename__ = "answers"
+    
     answer_text: str = Field(nullable=False)
     question_id: int = Field(foreign_key="questions.id", nullable=False)
     confidence_score: float = Field(nullable=False)

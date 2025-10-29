@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     WORKOS_REDIRECT_URI: str = ""
     WORKOS_STATE_SECRET: str = ""
     WORKOS_STATE_TIMEOUT: int = 600
+    FRONTEND_URL: str = ""
 
     JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"

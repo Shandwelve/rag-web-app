@@ -26,19 +26,19 @@ class QARepository(Repository):
 
     async def get_answers_by_question_id(self, question_id: int) -> list[Answer]:
         result = await self._session.exec(select(Answer).where(Answer.question_id == question_id))
-        return list(result.scalars().all())
+        return list(result.all())
 
     async def get_questions_by_user(self, user_id: int, limit: int = 50) -> list[Question]:
         result = await self._session.exec(
             select(Question).where(Question.user_id == user_id).order_by(Question.created_at.desc()).limit(limit)
         )
-        return list(result.scalars().all())
+        return list(result.all())
 
     async def get_questions_by_session(self, session_id: str) -> list[Question]:
         result = await self._session.exec(
             select(Question).where(Question.session_id == session_id).order_by(Question.created_at.asc())
         )
-        return list(result.scalars().all())
+        return list(result.all())
 
     async def get_qa_pairs_by_user(self, user_id: int, limit: int = 50) -> list[tuple[Question, Answer]]:
         result = await self._session.exec(
@@ -60,10 +60,10 @@ class QARepository(Repository):
 
     async def get_question_stats(self, user_id: int) -> QuestionStats:
         questions_result = await self._session.exec(select(Question).where(Question.user_id == user_id))
-        questions = list(questions_result.scalars().all())
+        questions = list(questions_result.all())
 
         answers_result = await self._session.exec(select(Answer).join(Question).where(Question.user_id == user_id))
-        answers = list(answers_result.scalars().all())
+        answers = list(answers_result.all())
 
         return QuestionStats(
             total_questions=len(questions),

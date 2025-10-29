@@ -1,3 +1,5 @@
+import { apiFetch } from '@/utils/api'
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 export interface LoginResponse {
@@ -21,8 +23,14 @@ export class AuthService {
     return response.json()
   }
 
-  static async handleCallback(code: string): Promise<LoginResponse> {
-    const response = await fetch(`${API_BASE_URL}/auth/callback?code=${code}`)
+  static async handleCallback(code: string, state: string): Promise<LoginResponse> {
+    const response = await fetch(`${API_BASE_URL}/auth/exchange`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ code, state }),
+    })
     if (!response.ok) {
       throw new Error('Authentication failed')
     }
@@ -44,11 +52,7 @@ export class AuthService {
   }
 
   static async getCurrentUser(token: string): Promise<User> {
-    const response = await fetch(`${API_BASE_URL}/auth/me`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    })
+    const response = await apiFetch('/auth/me')
     if (!response.ok) {
       throw new Error('Failed to get user info')
     }

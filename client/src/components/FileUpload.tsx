@@ -22,19 +22,30 @@ export function FileUpload({ onFileUpload, isUploading = false }: FileUploadProp
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     for (const file of acceptedFiles) {
+      const fileId = Date.now()
+      // Add file with "uploading" status immediately
+      const newFile: UploadedFile = {
+        id: fileId,
+        filename: file.name,
+        file_size: file.size,
+        file_type: file.type,
+        status: "uploading",
+        created_at: new Date().toISOString(),
+      }
+      setUploadedFiles(prev => [...prev, newFile])
+      
       try {
         await onFileUpload(file)
-        const newFile: UploadedFile = {
-          id: Date.now(),
-          filename: file.name,
-          file_size: file.size,
-          file_type: file.type,
-          status: "uploading",
-          created_at: new Date().toISOString(),
-        }
-        setUploadedFiles(prev => [...prev, newFile])
+        // Update status to "ready" after successful upload
+        setUploadedFiles(prev => prev.map(f => 
+          f.id === fileId ? { ...f, status: "ready" } : f
+        ))
       } catch (error) {
         console.error("Upload failed:", error)
+        // Update status to "error" on failure
+        setUploadedFiles(prev => prev.map(f => 
+          f.id === fileId ? { ...f, status: "error" } : f
+        ))
       }
     }
   }, [onFileUpload])

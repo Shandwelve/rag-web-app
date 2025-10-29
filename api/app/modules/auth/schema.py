@@ -35,6 +35,11 @@ class LoginResponse(BaseModel):
     authorization_url: str
 
 
+class TokenExchangeRequest(BaseModel):
+    code: str
+    state: str
+
+
 class UserCreate(BaseModel):
     email: str
     role: UserRole = UserRole.USER
