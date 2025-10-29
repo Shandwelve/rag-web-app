@@ -40,7 +40,13 @@ class VectorStoreManager:
             texts = [doc["text"] for doc in documents]
             logger.debug(f"Generating embeddings for {len(texts)} texts")
             embeddings = self.embedding_model.encode(texts).tolist()
-            metadatas = [doc["metadata"] for doc in documents]
+            
+            metadatas = []
+            for doc in documents:
+                metadata = doc["metadata"]
+                cleaned_metadata = {k: v for k, v in metadata.items() if v is not None}
+                metadatas.append(cleaned_metadata)
+            
             ids = [doc["id"] for doc in documents]
 
             self.collection.add(embeddings=embeddings, documents=texts, metadatas=metadatas, ids=ids)

@@ -333,7 +333,14 @@ class DocumentService:
 
     def _build_sources(self, search_results: list[dict[str, Any]]) -> list[SourceReference]:
         sources = []
-        for result in search_results:
+        top_results = search_results[:3]
+        relevance_threshold = 0.6
+        
+        for result in top_results:
+            distance = result.get("distance", 1.0)
+            if distance > relevance_threshold:
+                continue
+                
             metadata = result["metadata"]
             sources.append(
                 SourceReference(
@@ -341,15 +348,24 @@ class DocumentService:
                     filename=metadata.get("filename", "Unknown"),
                     page_number=metadata.get("page_number"),
                     chunk_index=metadata.get("chunk_index", 0),
-                    relevance_score=1.0 - result.get("distance", 0.0),
+                    relevance_score=1.0 - distance,
                 )
             )
         return sources
 
     async def _build_images(self, search_results: list[dict[str, Any]]) -> list[ImageReference]:
         images = []
-
-        for result in search_results:
+        seen_image_b64 = set()
+        top_results = search_results[:3]
+        min_relevance_score = 0.4
+        
+        for result in top_results:
+            distance = result.get("distance", 1.0)
+            relevance_score = 1.0 - distance
+            
+            if relevance_score < min_relevance_score:
+                continue
+                
             metadata = result["metadata"]
             file_id = metadata.get("file_id")
             chunk_index = metadata.get("chunk_index")

@@ -1,32 +1,43 @@
 import tempfile
 from typing import Any
 
-import aiofiles
 import openai
 
+from app.core.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 class AudioProcessingService:
+    def __init__(self) -> None:
+        logger.info("Initializing AudioProcessingService with OpenAI client")
+        self.client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+
     async def transcribe_with_openai(self, audio_data: bytes, filename: str = None) -> tuple[str, dict[str, Any]]:
         logger.info(f"Starting audio transcription for file: {filename}, size: {len(audio_data)} bytes")
         try:
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+            with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as temp_file:
                 temp_file.write(audio_data)
                 temp_file.flush()
+                temp_file_name = temp_file.name
 
-                async with aiofiles.open(temp_file.name, "rb") as f:
-                    logger.debug(f"Calling OpenAI Whisper API for transcription")
-                    transcript = openai.Audio.transcribe("whisper-1", f)
-                    transcribed_text = transcript.text.strip()
+            logger.debug(f"Calling OpenAI Whisper API for transcription")
+            with open(temp_file_name, "rb") as f:
+                transcript = self.client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=f,
+                    response_format="text",
+                    language="en",
+                )
+                
+            transcribed_text = transcript.strip()
 
-                logger.info(f"Transcription completed. Text length: {len(transcribed_text)} characters")
+            logger.info(f"Transcription completed. Text length: {len(transcribed_text)} characters")
 
-                metadata = {"provider": "openai", "filename": filename}
+            metadata = {"provider": "openai", "filename": filename}
 
-                return transcribed_text, metadata
+            return transcribed_text, metadata
         except Exception as e:
             logger.error(f"Error during audio transcription for file {filename}: {str(e)}", exc_info=True)
             raise
