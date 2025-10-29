@@ -7,7 +7,7 @@ from app.modules.auth.exceptions import AuthenticationError
 from app.modules.auth.models import User
 from app.modules.auth.repository import UserRepository
 from app.modules.auth.schema import UserRole
-from app.modules.auth.service import AuthService
+from app.modules.auth.services.auth_service import AuthService
 
 security = HTTPBearer()
 

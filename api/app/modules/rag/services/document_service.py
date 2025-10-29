@@ -19,12 +19,10 @@ from app.modules.rag.schema import (
     RAGResult,
     SourceReference,
 )
-from app.modules.rag.services import (
-    AudioProcessingService,
-    OpenAIService,
-    PDFContentManager,
-    VectorStoreManager,
-)
+from app.modules.rag.services.audio_processing_service import AudioProcessingService
+from app.modules.rag.services.openai_service import OpenAIService
+from app.modules.rag.services.content_manager import PDFContentManager, DOCXContentManager
+from app.modules.rag.services.vector_store_manager import VectorStoreManager
 
 logger = get_logger(__name__)
 
@@ -33,6 +31,7 @@ class DocumentService:
     def __init__(
         self,
         pdf_manager: Annotated[PDFContentManager, Depends(PDFContentManager)],
+        docx_manager: Annotated[DOCXContentManager, Depends(DOCXContentManager)],
         vector_store: Annotated[VectorStoreManager, Depends(VectorStoreManager)],
         openai_service: Annotated[OpenAIService, Depends(OpenAIService)],
         files_repository: Annotated[FileRepository, Depends(FileRepository)],
@@ -40,6 +39,7 @@ class DocumentService:
         audio_service: Annotated[AudioProcessingService, Depends(AudioProcessingService)],
     ) -> None:
         self.pdf_manager = pdf_manager
+        self.docx_manager = docx_manager
         self.vector_store = vector_store
         self.openai_service = openai_service
         self.files_repository = files_repository
@@ -81,26 +81,34 @@ class DocumentService:
         )
 
     async def _process_rag_query(self, question_text: str) -> RAGResult:
-        pdf_files = await self._get_available_pdf_files()
+        logger.debug(f"Processing RAG query: {question_text[:100]}...")
+        documents = await self._get_available_documents()
+        logger.debug(f"Found {len(documents)} available documents")
 
-        if not pdf_files:
+        if not documents:
+            logger.warning("No documents available for RAG query")
             return self._create_no_documents_result()
 
-        await self._process_documents(pdf_files)
+        await self._process_documents(documents)
+        logger.debug("Executing vector store search")
         search_results = self.vector_store.search(question_text, n_results=5)
 
         if not search_results:
+            logger.warning("No search results found in vector store")
             return self._create_no_results_result()
 
+        logger.debug(f"Found {len(search_results)} search results, generating RAG response")
         return await self._generate_rag_response(question_text, search_results)
 
-    async def _get_available_pdf_files(self) -> list:
+    async def _get_available_documents(self) -> list:
         files = await self.files_repository.get_all()
-        return [file for file in files if file.file_type == FileType.PDF]
+        documents = [file for file in files if file.file_type in [FileType.PDF, FileType.DOCX]]
+        logger.debug(f"Retrieved {len(documents)} documents (PDF/DOCX) from {len(files)} total files")
+        return documents
 
     def _create_no_documents_result(self) -> RAGResult:
         return {
-            "answer_text": "No PDF documents available for processing.",
+            "answer_text": "No documents available for processing.",
             "sources": [],
             "images": [],
             "confidence_score": 0.0,
@@ -139,7 +147,7 @@ class DocumentService:
     def _calculate_processing_time(self, start_time: float) -> int:
         return int((time.time() - start_time) * 1000)
 
-    async def _create_answer_record(self, question_id: int, rag_result: dict, processing_time: int) -> Answer:
+    async def _create_answer_record(self, question_id: int, rag_result: RAGResult, processing_time: int) -> Answer:
         return await self.qa_repository.create_answer(
             AnswerCreate(
                 answer_text=rag_result["answer_text"],
@@ -157,7 +165,7 @@ class DocumentService:
     def _serialize_images(self, images: list) -> str | None:
         return json.dumps([i.model_dump() for i in images]) if images else None
 
-    def _build_response(self, question_id: int, rag_result: dict) -> AnswerResponse:
+    def _build_response(self, question_id: int, rag_result: RAGResult) -> AnswerResponse:
         return AnswerResponse(
             answer=rag_result["answer_text"],
             sources=rag_result["sources"],
@@ -255,12 +263,21 @@ class DocumentService:
         )
 
     async def _process_documents(self, files: list[Any]) -> None:
+        logger.info(f"Processing {len(files)} documents")
         for file in files:
             if file.id in self.processed_files:
+                logger.debug(f"File {file.id} ({file.original_filename}) already processed, skipping")
                 continue
 
             try:
-                texts, images = self.pdf_manager.process(file.file_path)
+                logger.info(f"Processing file {file.id}: {file.original_filename} (type: {file.file_type})")
+                if file.file_type == FileType.PDF:
+                    texts, images = self.pdf_manager.process(file.file_path)
+                elif file.file_type == FileType.DOCX:
+                    texts, images = self.docx_manager.process(file.file_path)
+                else:
+                    logger.warning(f"Unsupported file type: {file.file_type} for file {file.original_filename}")
+                    continue
 
                 chunk_images = {}
                 for i, text in enumerate(texts):
@@ -299,10 +316,13 @@ class DocumentService:
                     )
 
                 if documents:
+                    logger.debug(f"Adding {len(documents)} document chunks to vector store for file {file.id}")
                     self.vector_store.add_documents(documents)
+                else:
+                    logger.warning(f"No documents extracted from file {file.original_filename}")
 
             except Exception as e:
-                print(f"Error processing file {file.filename}: {str(e)}")
+                logger.error(f"Error processing file {file.original_filename} (id: {file.id}): {str(e)}", exc_info=True)
                 continue
 
     def _build_context(self, search_results: list[dict[str, Any]]) -> str:

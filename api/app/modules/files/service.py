@@ -16,7 +16,7 @@ from app.modules.files.schema import FileContentResponse, FileType
 
 
 class FileService:
-    def __init__(self, file_repository: Annotated[FileRepository, Depends()]) -> None:
+    def __init__(self, file_repository: Annotated[FileRepository, Depends(FileRepository)]) -> None:
         self.file_repository = file_repository
         self.upload_dir = settings.STORAGE_DIR
         self.upload_dir.mkdir(parents=True, exist_ok=True)

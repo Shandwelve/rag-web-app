@@ -20,7 +20,7 @@ router = APIRouter(prefix="/rag", tags=["RAG"])
 async def ask_question(
     request: QuestionRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-    document_service: Annotated[DocumentService, Depends()],
+    document_service: Annotated[DocumentService, Depends(DocumentService)],
 ) -> AnswerResponse:
     return await document_service.process_question(request, current_user.id)
 
@@ -28,9 +28,9 @@ async def ask_question(
 @router.post("/ask-voice")
 async def ask_voice_question(
     audio_file: UploadFile,
-    session_id: Form(None),
     current_user: Annotated[User, Depends(get_current_user)],
     document_service: Annotated[DocumentService, Depends(DocumentService)],
+    session_id: str | None = Form(None),
 ) -> AnswerResponse:
     return await document_service.process_audio_question(audio_file, current_user.id, session_id)
 
@@ -74,6 +74,6 @@ async def delete_question(
 @router.get("/stats")
 async def get_user_stats(
     current_user: Annotated[User, Depends(get_current_user)],
-    document_service: Annotated[DocumentService, Depends()],
+    document_service: Annotated[DocumentService, Depends(DocumentService)],
 ) -> QuestionStats:
     return await document_service.get_user_stats(current_user.id)

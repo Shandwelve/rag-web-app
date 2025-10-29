@@ -163,4 +163,4 @@ cython_debug/
 #.idea/
 storage
 chroma_db
-
+logs

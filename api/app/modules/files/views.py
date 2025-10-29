@@ -21,7 +21,7 @@ def _get_download_url(request: Request, file_id: int) -> str:
 @router.post("/upload")
 async def upload_file_view(
     file: Annotated[UploadFile, File()],
-    file_service: Annotated[FileService, Depends()],
+    file_service: Annotated[FileService, Depends(FileService)],
     current_user: Annotated[User, Depends(get_current_user)],
     request: Request,
 ) -> FileResponse:
@@ -47,7 +47,7 @@ async def upload_file_view(
 
 @router.get("/")
 async def get_files_view(
-    file_service: Annotated[FileService, Depends()],
+    file_service: Annotated[FileService, Depends(FileService)],
     current_user: Annotated[User, Depends(get_current_user)],
     request: Request,
 ) -> list[FileResponse]:
@@ -73,7 +73,7 @@ async def get_files_view(
 @router.get("/{file_id}")
 async def get_file_view(
     file_id: int,
-    file_service: Annotated[FileService, Depends()],
+    file_service: Annotated[FileService, Depends(FileService)],
     current_user: Annotated[User, Depends(get_current_user)],
     request: Request,
 ) -> FileResponse:
@@ -96,7 +96,7 @@ async def get_file_view(
 @router.get("/{file_id}/download")
 async def download_file_view(
     file_id: int,
-    file_service: Annotated[FileService, Depends()],
+    file_service: Annotated[FileService, Depends(FileService)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> Response:
     file_data = await file_service.get_file_content(file_id, current_user.id)
@@ -112,7 +112,7 @@ async def download_file_view(
 @router.delete("/{file_id}")
 async def delete_file_view(
     file_id: int,
-    file_service: Annotated[FileService, Depends()],
+    file_service: Annotated[FileService, Depends(FileService)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> MessageResponse:
     success = await file_service.delete_file(file_id, current_user.id)
