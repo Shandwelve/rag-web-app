@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Users, Trash2, Edit } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,9 +13,15 @@ export function AdminPanel() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editEmail, setEditEmail] = useState('')
   const [editRole, setEditRole] = useState<'user' | 'admin'>('user')
+  const fetchInProgress = useRef(false)
 
   useEffect(() => {
-    fetchUsers()
+    if (fetchInProgress.current) return
+    
+    fetchInProgress.current = true
+    fetchUsers().finally(() => {
+      fetchInProgress.current = false
+    })
   }, [])
 
   const fetchUsers = async () => {

@@ -21,32 +21,32 @@ export function FileUpload({ onFileUpload, isUploading = false }: FileUploadProp
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    for (const file of acceptedFiles) {
-      const fileId = Date.now()
-      // Add file with "uploading" status immediately
-      const newFile: UploadedFile = {
-        id: fileId,
-        filename: file.name,
-        file_size: file.size,
-        file_type: file.type,
-        status: "uploading",
-        created_at: new Date().toISOString(),
-      }
-      setUploadedFiles(prev => [...prev, newFile])
-      
-      try {
-        await onFileUpload(file)
-        // Update status to "ready" after successful upload
-        setUploadedFiles(prev => prev.map(f => 
-          f.id === fileId ? { ...f, status: "ready" } : f
-        ))
-      } catch (error) {
-        console.error("Upload failed:", error)
-        // Update status to "error" on failure
-        setUploadedFiles(prev => prev.map(f => 
-          f.id === fileId ? { ...f, status: "error" } : f
-        ))
-      }
+    if (acceptedFiles.length === 0) return
+    
+    const file = acceptedFiles[0]
+    const fileId = Date.now()
+    const newFile: UploadedFile = {
+      id: fileId,
+      filename: file.name,
+      file_size: file.size,
+      file_type: file.type,
+      status: "uploading",
+      created_at: new Date().toISOString(),
+    }
+    setUploadedFiles([newFile])
+    
+    try {
+      await onFileUpload(file)
+      // Update status to "ready" after successful upload
+      setUploadedFiles(prev => prev.map(f => 
+        f.id === fileId ? { ...f, status: "ready" } : f
+      ))
+    } catch (error) {
+      console.error("Upload failed:", error)
+      // Update status to "error" on failure
+      setUploadedFiles(prev => prev.map(f => 
+        f.id === fileId ? { ...f, status: "error" } : f
+      ))
     }
   }, [onFileUpload])
 
@@ -96,16 +96,16 @@ export function FileUpload({ onFileUpload, isUploading = false }: FileUploadProp
         <input {...getInputProps()} />
         <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
         <p className="text-lg font-medium text-gray-700 mb-2">
-          {isDragActive ? "Drop files here" : "Drag & drop files here, or click to select"}
+          {isDragActive ? "Drop file here" : "Drag & drop file here, or click to select"}
         </p>
         <p className="text-sm text-gray-500">
-          Supports PDF, TXT, DOCX, and MD files (max 10 files)
+          Supports PDF and DOCX files (single file upload)
         </p>
       </div>
 
       {uploadedFiles.length > 0 && (
         <div className="mt-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Uploaded Files</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Uploaded File</h3>
           <div className="space-y-2">
             {uploadedFiles.map((file) => (
               <div

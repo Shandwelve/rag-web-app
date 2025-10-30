@@ -1,42 +1,33 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { BarChart3 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RAGService, type QuestionStats } from '@/services/ragService'
 
-let statsFetchPromise: Promise<void> | null = null
-
 export function RAGStats() {
   const [stats, setStats] = useState<QuestionStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const fetchInProgress = useRef(false)
 
   useEffect(() => {
-    if (statsFetchPromise) return
+    if (fetchInProgress.current) return
     
-    const abortController = new AbortController()
+    fetchInProgress.current = true
     
-    statsFetchPromise = (async () => {
+    const fetchStats = async () => {
       setIsLoading(true)
       try {
         const data = await RAGService.getStats()
-        if (!abortController.signal.aborted) {
-          setStats(data)
-        }
+        setStats(data)
       } catch (error) {
-        if (!abortController.signal.aborted) {
-          console.error('Error fetching stats:', error)
-        }
+        console.error('Error fetching stats:', error)
       } finally {
-        if (!abortController.signal.aborted) {
-          setIsLoading(false)
-        }
-        statsFetchPromise = null
+        setIsLoading(false)
+        fetchInProgress.current = false
       }
-    })()
-
-    return () => {
-      abortController.abort()
     }
+
+    fetchStats()
   }, [])
 
   return (
@@ -68,7 +59,9 @@ export function RAGStats() {
             <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
               <span className="text-sm font-medium">Average Confidence</span>
               <span className="text-2xl font-bold">
-                {(stats.avg_confidence * 100).toFixed(1)}%
+                {stats.avg_confidence != null && !isNaN(stats.avg_confidence)
+                  ? `${(stats.avg_confidence * 100).toFixed(1)}%`
+                  : '0%'}
               </span>
             </div>
           </div>

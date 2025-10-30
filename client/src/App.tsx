@@ -219,7 +219,7 @@ const AppContent: React.FC = () => {
                       onClick={() => setActiveTab('admin')}
                     >
                       <Users className="mr-2 h-4 w-4" />
-                      Admin
+                      Users
                     </Button>
                   </>
                 )}
