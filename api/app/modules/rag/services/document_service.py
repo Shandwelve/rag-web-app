@@ -7,7 +7,9 @@ from fastapi import Depends, UploadFile
 from app.core.logging import get_logger
 from app.modules.files.repository import FileRepository
 from app.modules.files.schema import FileType
-from app.modules.rag.models import Answer, Question
+from app.modules.rag.document_chunk_repository import DocumentChunkRepository
+from app.modules.rag.image_repository import ImageRepository
+from app.modules.rag.models import Answer, Question, Image
 from app.modules.rag.repository import QARepository
 from app.modules.rag.schema import (
     AnswerCreate,
@@ -39,6 +41,8 @@ class DocumentService:
         openai_service: Annotated[OpenAIService, Depends(OpenAIService)],
         files_repository: Annotated[FileRepository, Depends(FileRepository)],
         qa_repository: Annotated[QARepository, Depends(QARepository)],
+        chunk_repository: Annotated[DocumentChunkRepository, Depends(DocumentChunkRepository)],
+        image_repository: Annotated[ImageRepository, Depends(ImageRepository)],
         audio_service: Annotated[AudioProcessingService, Depends(AudioProcessingService)],
     ) -> None:
         self.pdf_manager = pdf_manager
@@ -48,6 +52,8 @@ class DocumentService:
         self.files_repository = files_repository
         self.qa_repository = qa_repository
         self.audio_service = audio_service
+        self.chunk_repository = chunk_repository
+        self.image_repository = image_repository
         self.processed_files = {}
 
     async def process_question(self, question: QuestionRequest, user_id: int = 1) -> AnswerResponse:
@@ -157,16 +163,12 @@ class DocumentService:
                 question_id=question_id,
                 confidence_score=rag_result["confidence_score"],
                 sources_used=self._serialize_sources(rag_result["sources"]),
-                images_used=self._serialize_images(rag_result["images"]),
                 processing_time_ms=processing_time,
             )
         )
 
     def _serialize_sources(self, sources: list) -> str | None:
         return json.dumps([s.model_dump() for s in sources]) if sources else None
-
-    def _serialize_images(self, images: list) -> str | None:
-        return json.dumps([i.model_dump() for i in images]) if images else None
 
     def _build_response(self, question_id: int, rag_result: RAGResult) -> AnswerResponse:
         return AnswerResponse(
@@ -288,8 +290,10 @@ class DocumentService:
     async def _process_documents(self, files: list[Any]) -> None:
         logger.info(f"Processing {len(files)} documents")
         for file in files:
-            if file.id in self.processed_files:
-                logger.debug(f"File {file.id} ({file.original_filename}) already processed, skipping")
+            chunks_exist = await self.chunk_repository.chunk_exists(file.id)
+            
+            if chunks_exist:
+                logger.debug(f"File {file.id} ({file.original_filename}) already has chunks in database, skipping processing")
                 continue
 
             try:
@@ -301,26 +305,6 @@ class DocumentService:
                 else:
                     logger.warning(f"Unsupported file type: {file.file_type} for file {file.original_filename}")
                     continue
-
-                chunk_images = {}
-                for i, text in enumerate(texts):
-                    page_number = getattr(text.metadata, "page_number", None)
-                    chunk_images[i] = []
-
-                    for img_b64 in images:
-                        img_page = (
-                            getattr(img_b64, "metadata", {}).get("page_number", None)
-                            if hasattr(img_b64, "metadata")
-                            else None
-                        )
-                        if page_number is None or img_page is None or page_number == img_page:
-                            chunk_images[i].append(img_b64)
-
-                self.processed_files[file.id] = {
-                    "texts": texts,
-                    "chunk_images": chunk_images,
-                    "filename": file.original_filename,
-                }
 
                 documents = []
                 for i, text in enumerate(texts):
@@ -341,12 +325,67 @@ class DocumentService:
                 if documents:
                     logger.debug(f"Adding {len(documents)} document chunks to vector store for file {file.id}")
                     await self.vector_store.add_documents(documents)
+                    
+                    await self._store_images_for_chunks(file.id, texts, images)
+
                 else:
                     logger.warning(f"No documents extracted from file {file.original_filename}")
 
             except Exception as e:
                 logger.error(f"Error processing file {file.original_filename} (id: {file.id}): {str(e)}", exc_info=True)
                 continue
+
+    async def _store_images_for_chunks(self, file_id: int, texts: list, images: list) -> None:
+        try:
+            chunks = await self.chunk_repository.get_by_file_id(file_id)
+            
+            if not chunks:
+                logger.warning(f"No chunks found for file {file_id}, cannot store images")
+                return
+
+            chunk_map = {chunk.chunk_index: chunk.id for chunk in chunks}
+            
+            images_to_store = []
+            for i, text in enumerate(texts):
+                page_number = getattr(text.metadata, "page_number", None)
+                chunk_id = chunk_map.get(i)
+                
+                if not chunk_id:
+                    continue
+                
+                chunk_image_list = []
+                for img_b64 in images:
+                    img_page = (
+                        getattr(img_b64, "metadata", {}).get("page_number", None)
+                        if hasattr(img_b64, "metadata")
+                        else None
+                    )
+                    if page_number is None or img_page is None or page_number == img_page:
+                        chunk_image_list.append(img_b64)
+                
+                for img_index, img_b64 in enumerate(chunk_image_list):
+                    base64_data = str(img_b64)
+                    if base64_data.startswith("data:image"):
+                        base64_data = base64_data.split(",", 1)[1] if "," in base64_data else base64_data
+                    
+                    image = Image(
+                        chunk_id=chunk_id,
+                        image_data=base64_data,
+                        file_id=file_id,
+                        page_number=page_number,
+                        image_index=img_index,
+                        description=f"Image from chunk {i}",
+                    )
+                    images_to_store.append(image)
+            
+            if images_to_store:
+                logger.info(f"Storing {len(images_to_store)} images for file {file_id}")
+                await self.image_repository.create_batch(images_to_store)
+            else:
+                logger.debug(f"No images to store for file {file_id}")
+                
+        except Exception as e:
+            logger.error(f"Error storing images for file {file_id}: {str(e)}", exc_info=True)
 
     def _build_context(self, search_results: list[dict[str, Any]]) -> str:
         context_parts = []
@@ -388,7 +427,7 @@ class DocumentService:
 
     async def _build_images(self, search_results: list[dict[str, Any]]) -> list[ImageReference]:
         images = []
-        seen_image_b64 = set()
+        seen_image_ids = set()
         top_results = search_results[:3]
         min_relevance_score = 0.4
         
@@ -402,26 +441,28 @@ class DocumentService:
             metadata = result["metadata"]
             file_id = metadata.get("file_id")
             chunk_index = metadata.get("chunk_index")
+            filename = metadata.get("filename", "Unknown")
 
-            if file_id in self.processed_files:
-                file_data = self.processed_files[file_id]
-                chunk_images = file_data.get("chunk_images", {})
-                filename = file_data["filename"]
-
-                if chunk_index in chunk_images:
-                    for img_b64 in chunk_images[chunk_index]:
-                        if img_b64 in seen_image_b64:
-                            continue
-                        
-                        seen_image_b64.add(img_b64)
-                        images.append(
-                            ImageReference(
-                                image_path=f"data:image/png;base64,{img_b64}",
-                                description=f"Image from {filename} (chunk {chunk_index})",
-                                page_number=metadata.get("page_number"),
-                                file_id=file_id,
-                            )
-                        )
+            chunk = await self.chunk_repository.get_by_file_id_and_chunk_index(file_id, chunk_index)
+            
+            if not chunk:
+                continue
+            
+            chunk_images = await self.image_repository.get_by_chunk_id(chunk.id)
+            
+            for img in chunk_images:
+                if img.id in seen_image_ids:
+                    continue
+                
+                seen_image_ids.add(img.id)
+                images.append(
+                    ImageReference(
+                        image_path=f"data:image/png;base64,{img.image_data}",
+                        description=img.description or f"Image from {filename} (chunk {chunk_index})",
+                        page_number=img.page_number or metadata.get("page_number"),
+                        file_id=file_id,
+                    )
+                )
 
         return images[:5]
 

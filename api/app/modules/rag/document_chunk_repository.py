@@ -26,3 +26,21 @@ class DocumentChunkRepository(Repository):
         
         result = await self._session.exec(stmt)
         return list(result.all())
+
+    async def get_by_file_id(self, file_id: int) -> list[DocumentChunk]:
+        stmt = select(DocumentChunk).where(DocumentChunk.file_id == file_id).order_by(DocumentChunk.chunk_index)
+        result = await self._session.exec(stmt)
+        return list(result.all())
+
+    async def get_by_file_id_and_chunk_index(self, file_id: int, chunk_index: int) -> DocumentChunk | None:
+        stmt = select(DocumentChunk).where(
+            DocumentChunk.file_id == file_id,
+            DocumentChunk.chunk_index == chunk_index
+        )
+        result = await self._session.exec(stmt)
+        return result.first()
+
+    async def chunk_exists(self, file_id: int) -> bool:
+        stmt = select(DocumentChunk).where(DocumentChunk.file_id == file_id).limit(1)
+        result = await self._session.exec(stmt)
+        return result.first() is not None

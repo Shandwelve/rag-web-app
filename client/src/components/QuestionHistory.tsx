@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { History, Trash2, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -7,12 +7,11 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RAGService, type QAPairResponse } from '@/services/ragService'
 
-let historyFetchPromise: Promise<void> | null = null
-
 export function QuestionHistory() {
   const [history, setHistory] = useState<QAPairResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set())
+  const fetchInProgress = useRef(false)
 
   const fetchHistory = async () => {
     setIsLoading(true)
@@ -27,32 +26,25 @@ export function QuestionHistory() {
   }
 
   useEffect(() => {
-    if (historyFetchPromise) return
+    // Prevent duplicate requests (e.g., from React StrictMode)
+    if (fetchInProgress.current) return
     
-    const abortController = new AbortController()
+    fetchInProgress.current = true
     
-    historyFetchPromise = (async () => {
+    const loadHistory = async () => {
       setIsLoading(true)
       try {
         const data = await RAGService.getQuestionHistory(50)
-        if (!abortController.signal.aborted) {
-          setHistory(data)
-        }
+        setHistory(data)
       } catch (error) {
-        if (!abortController.signal.aborted) {
-          console.error('Error fetching history:', error)
-        }
+        console.error('Error fetching history:', error)
       } finally {
-        if (!abortController.signal.aborted) {
-          setIsLoading(false)
-        }
-        historyFetchPromise = null
+        setIsLoading(false)
+        fetchInProgress.current = false
       }
-    })()
-
-    return () => {
-      abortController.abort()
     }
+
+    loadHistory()
   }, [])
 
   const handleDelete = async (questionId: number) => {

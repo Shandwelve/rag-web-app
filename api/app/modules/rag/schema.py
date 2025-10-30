@@ -99,7 +99,6 @@ class QAResponse(BaseModel):
     question_id: int
     confidence_score: float
     sources_used: str | None
-    images_used: str | None
     processing_time_ms: str | None
     created_at: datetime
     updated_at: datetime

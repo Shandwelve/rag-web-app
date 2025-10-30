@@ -22,7 +22,7 @@ class QARepository(Repository):
 
     async def get_question_by_id(self, question_id: int) -> Question | None:
         result = await self._session.exec(select(Question).where(Question.id == question_id))
-        return result.scalar_one_or_none()
+        return result.first()
 
     async def get_answers_by_question_id(self, question_id: int) -> list[Answer]:
         result = await self._session.exec(select(Answer).where(Answer.question_id == question_id))

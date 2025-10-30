@@ -1,7 +1,7 @@
 from typing import Any
 
 from sqlmodel import Column, Field, Relationship
-from sqlalchemy import JSON, ForeignKey
+from sqlalchemy import JSON, ForeignKey, Text
 from pgvector.sqlalchemy import Vector
 
 from app.core.models import BaseModel
@@ -25,7 +25,6 @@ class Answer(BaseModel, table=True):
     question_id: int = Field(foreign_key="questions.id", nullable=False)
     confidence_score: float = Field(nullable=False)
     sources_used: str | None = Field(nullable=True)
-    images_used: str | None = Field(nullable=True)
     processing_time_ms: int | None = Field(nullable=True)
 
     question: Question = Relationship(back_populates="answers")
@@ -44,3 +43,22 @@ class DocumentChunk(BaseModel, table=True):
     chunk_index: int = Field(nullable=False)
     page_number: int | None = Field(nullable=True)
     chunk_metadata: dict | None = Field(default=None, sa_column=Column(JSON))
+
+    images: list["Image"] = Relationship(back_populates="chunk")
+
+
+class Image(BaseModel, table=True):
+    __tablename__ = "images"
+    
+    chunk_id: int = Field(
+        sa_column=Column(ForeignKey("document_chunks.id", ondelete="CASCADE"), nullable=False, index=True),
+    )
+    image_data: str = Field(sa_column=Column(Text, nullable=False))  # base64 encoded image
+    file_id: int = Field(
+        sa_column=Column(ForeignKey("file.id", ondelete="CASCADE"), nullable=False, index=True),
+    )
+    page_number: int | None = Field(nullable=True)
+    description: str | None = Field(nullable=True)
+    image_index: int = Field(nullable=False, default=0)  # Order of image within chunk
+    
+    chunk: DocumentChunk = Relationship(back_populates="images")
