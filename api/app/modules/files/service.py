@@ -9,17 +9,27 @@ import aiofiles
 from fastapi import Depends
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.modules.files.exceptions import UnsupportedFileTypeError
 from app.modules.files.models import File
 from app.modules.files.repository import FileRepository
 from app.modules.files.schema import FileContentResponse, FileType
+from app.modules.rag.services import VectorStoreManager
+
+
+logger = get_logger(__name__)
 
 
 class FileService:
-    def __init__(self, file_repository: Annotated[FileRepository, Depends(FileRepository)]) -> None:
+    def __init__(
+        self,
+        file_repository: Annotated[FileRepository, Depends(FileRepository)],
+        vector_store: Annotated[VectorStoreManager, Depends(VectorStoreManager)],
+    ) -> None:
         self.file_repository = file_repository
         self.upload_dir = settings.STORAGE_DIR
         self.upload_dir.mkdir(parents=True, exist_ok=True)
+        self.vector_store = vector_store
 
     async def save_file(self, file_content: bytes, filename: str, user_id: int) -> File:
         file_type = self._get_file_type(filename)

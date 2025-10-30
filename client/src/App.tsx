@@ -11,7 +11,7 @@ import { QuestionHistory } from './components/QuestionHistory'
 import { RAGStats } from './components/RAGStats'
 import { AuthService } from './services/authService'
 import { FileService } from './services/fileService'
-import { Home, FileText, MessageSquare, History, BarChart3, Users, Loader2 } from 'lucide-react'
+import { Home, FileText, MessageSquare, History, BarChart3, Users, Loader2, Lock } from 'lucide-react'
 import { Button } from './components/ui/button'
 import { Card } from './components/ui/card'
 
@@ -52,7 +52,7 @@ const AppContent: React.FC = () => {
           const tokenResponse = await AuthService.handleCallback(code, state)
           // Save token to localStorage immediately so apiFetch can use it
           localStorage.setItem('auth_token', tokenResponse.access_token)
-          const userResponse = await AuthService.getCurrentUser(tokenResponse.access_token)
+          const userResponse = await AuthService.getCurrentUser()
           login(tokenResponse.access_token, userResponse)
           
           window.history.replaceState({}, document.title, window.location.pathname)
@@ -121,11 +121,29 @@ const AppContent: React.FC = () => {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen space-y-6 p-4">
-        <Card className="p-8 max-w-md w-full text-center">
-          <h1 className="text-3xl font-bold mb-2">RAG Web Application</h1>
-          <p className="text-muted-foreground mb-6">Please log in to access the application</p>
-          <LoginButton />
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-gray-50 to-white">
+        <Card className="p-10 max-w-lg w-full shadow-lg border-0">
+          {/* Icon in?gradient container */}
+          <div className="flex justify-center mb-6">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-300 to-white flex items-center justify-center shadow-md">
+              <Lock className="h-10 w-10 text-gray-700" />
+            </div>
+          </div>
+          
+          {/* Welcome text */}
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold mb-3 text-gray-900">Welcome</h1>
+            <p className="text-lg text-muted-foreground">
+              Sign in to your account to access the RAG Web Application
+            </p>
+          </div>
+          
+          {/* Login buttons */}
+          <div className="space-y-3">
+            <LoginButton provider="GoogleOAuth" />
+            <LoginButton provider="MicrosoftOAuth" />
+            <LoginButton provider="GitHubOAuth" />
+          </div>
         </Card>
       </div>
     )

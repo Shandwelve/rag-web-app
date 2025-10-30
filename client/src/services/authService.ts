@@ -15,8 +15,8 @@ export interface User {
 }
 
 export class AuthService {
-  static async getLoginUrl(): Promise<{ authorization_url: string }> {
-    const response = await fetch(`${API_BASE_URL}/auth/login`)
+  static async getLoginUrl(provider: string = 'GoogleOAuth'): Promise<{ authorization_url: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/login?provider=${encodeURIComponent(provider)}`)
     if (!response.ok) {
       throw new Error('Failed to get login URL')
     }
@@ -51,7 +51,7 @@ export class AuthService {
     return response.json()
   }
 
-  static async getCurrentUser(token: string): Promise<User> {
+  static async getCurrentUser(): Promise<User> {
     const response = await apiFetch('/auth/me')
     if (!response.ok) {
       throw new Error('Failed to get user info')

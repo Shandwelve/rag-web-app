@@ -27,7 +27,6 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     OPENAI_API_KEY: str = ""
-    CHROMA_PERSIST_DIRECTORY: str = "chroma_db"
     CHAT_MODEL: str = "gpt-4o-mini"
     MAX_TOKENS: int = 1000
     CHUNK_OVERLAP: int = 200

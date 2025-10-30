@@ -91,7 +91,7 @@ class DocumentService:
 
         await self._process_documents(documents)
         logger.debug("Executing vector store search")
-        search_results = self.vector_store.search(question_text, n_results=5)
+        search_results = await self.vector_store.search(question_text, n_results=5)
 
         if not search_results:
             logger.warning("No search results found in vector store")
@@ -317,7 +317,7 @@ class DocumentService:
 
                 if documents:
                     logger.debug(f"Adding {len(documents)} document chunks to vector store for file {file.id}")
-                    self.vector_store.add_documents(documents)
+                    await self.vector_store.add_documents(documents)
                 else:
                     logger.warning(f"No documents extracted from file {file.original_filename}")
 

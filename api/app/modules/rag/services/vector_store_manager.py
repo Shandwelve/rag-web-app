@@ -1,26 +1,25 @@
-from typing import Any
+from typing import Annotated, Any
 
-import chromadb
-from chromadb.config import Settings
+import numpy as np
 from sentence_transformers import SentenceTransformer
+from fastapi import Depends
 
-from app.core.config import settings
 from app.core.logging import get_logger
+from app.modules.rag.models import DocumentChunk
+from app.modules.rag.document_chunk_repository import DocumentChunkRepository
 
 logger = get_logger(__name__)
 
 
 class VectorStoreManager:
-    def __init__(self) -> None:
-        logger.info(f"Initializing VectorStoreManager with ChromaDB path: {settings.CHROMA_PERSIST_DIRECTORY}")
+    def __init__(
+        self,
+        repository: Annotated[DocumentChunkRepository, Depends(DocumentChunkRepository)],
+    ) -> None:
+        logger.info("Initializing VectorStoreManager with pgvector")
+        self._repository = repository
+        
         try:
-            self.client = chromadb.PersistentClient(
-                path=settings.CHROMA_PERSIST_DIRECTORY,
-                settings=Settings(anonymized_telemetry=False),
-            )
-            self.collection = self.client.get_or_create_collection(name="documents", metadata={"hnsw:space": "cosine"})
-            logger.info("ChromaDB collection 'documents' initialized successfully")
-            
             logger.debug("Loading embedding model: all-MiniLM-L6-v2")
             try:
                 self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
@@ -34,60 +33,72 @@ class VectorStoreManager:
             logger.error(f"Error initializing VectorStoreManager: {str(e)}", exc_info=True)
             raise
 
-    def add_documents(self, documents: list[dict[str, Any]]) -> None:
+    async def add_documents(self, documents: list[dict[str, Any]]) -> None:
         logger.info(f"Adding {len(documents)} documents to vector store")
         try:
             texts = [doc["text"] for doc in documents]
             logger.debug(f"Generating embeddings for {len(texts)} texts")
             embeddings = self.embedding_model.encode(texts).tolist()
             
-            metadatas = []
-            for doc in documents:
-                metadata = doc["metadata"]
-                cleaned_metadata = {k: v for k, v in metadata.items() if v is not None}
-                metadatas.append(cleaned_metadata)
+            chunk_objects = []
+            for doc, embedding in zip(documents, embeddings, strict=True):
+                metadata = doc.get("metadata", {})
+                chunk = DocumentChunk(
+                    text=doc["text"],
+                    embedding=embedding,
+                    file_id=metadata.get("file_id"),
+                    chunk_index=metadata.get("chunk_index", 0),
+                    page_number=metadata.get("page_number"),
+                    chunk_metadata=metadata,
+                )
+                chunk_objects.append(chunk)
             
-            ids = [doc["id"] for doc in documents]
-
-            self.collection.add(embeddings=embeddings, documents=texts, metadatas=metadatas, ids=ids)
+            await self._repository.create_batch(chunk_objects)
             logger.info(f"Successfully added {len(documents)} documents to vector store")
         except Exception as e:
             logger.error(f"Error adding documents to vector store: {str(e)}", exc_info=True)
             raise
 
-    def search(self, query: str, n_results: int = 5) -> list[dict[str, Any]]:
+    async def search(self, query: str, n_results: int = 5) -> list[dict[str, Any]]:
         logger.info(f"Searching vector store for query: {query[:100]}..., n_results: {n_results}")
         try:
-            query_embedding = self.embedding_model.encode([query]).tolist()
+            query_embedding = self.embedding_model.encode([query])[0].tolist()
 
-            results = self.collection.query(
-                query_embeddings=query_embedding,
-                n_results=n_results,
-                include=["documents", "metadatas", "distances"],
-            )
-
-            result_count = len(results["documents"][0]) if results["documents"] else 0
-            logger.info(f"Vector search completed. Found {result_count} results")
-            logger.debug(f"Result distances: {[round(d, 4) for d in results['distances'][0][:3]] if results.get('distances') and results['distances'][0] else 'N/A'}")
-
-            return [
-                {"text": doc, "metadata": meta, "distance": dist}
-                for doc, meta, dist in zip(
-                    results["documents"][0],
-                    results["metadatas"][0],
-                    results["distances"][0],
-                    strict=True,
+            chunks = await self._repository.search_by_embedding(query_embedding, n_results)
+            
+            search_results = []
+            for chunk in chunks:
+                embedding_array = np.array(chunk.embedding)
+                query_array = np.array(query_embedding)
+                cosine_sim = np.dot(embedding_array, query_array) / (
+                    np.linalg.norm(embedding_array) * np.linalg.norm(query_array)
                 )
-            ]
+                distance = 1.0 - cosine_sim
+                
+                if chunk.chunk_metadata:
+                    metadata = chunk.chunk_metadata.copy()
+                    metadata.setdefault("file_id", chunk.file_id)
+                    metadata.setdefault("chunk_index", chunk.chunk_index)
+                    metadata.setdefault("page_number", chunk.page_number)
+                else:
+                    metadata = {
+                        "file_id": chunk.file_id,
+                        "filename": None,
+                        "chunk_index": chunk.chunk_index,
+                        "page_number": chunk.page_number,
+                    }
+                
+                search_results.append({
+                    "text": chunk.text,
+                    "metadata": metadata,
+                    "distance": float(distance),
+                })
+
+            result_count = len(search_results)
+            logger.info(f"Vector search completed. Found {result_count} results")
+            logger.debug(f"Result distances: {[round(r['distance'], 4) for r in search_results[:3]] if search_results else 'N/A'}")
+
+            return search_results
         except Exception as e:
             logger.error(f"Error searching vector store: {str(e)}", exc_info=True)
-            raise
-
-    def delete_documents(self, file_id: int) -> None:
-        logger.info(f"Deleting documents from vector store for file_id: {file_id}")
-        try:
-            self.collection.delete(where={"file_id": file_id})
-            logger.info(f"Successfully deleted documents for file_id: {file_id}")
-        except Exception as e:
-            logger.error(f"Error deleting documents for file_id {file_id}: {str(e)}", exc_info=True)
             raise
