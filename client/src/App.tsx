@@ -68,6 +68,12 @@ const AppContent: React.FC = () => {
   }, [isAuthenticated, login])
 
   useEffect(() => {
+    if (isAuthenticated && user?.role === 'user' && activeTab !== 'chat') {
+      setActiveTab('chat')
+    }
+  }, [isAuthenticated, user, activeTab])
+
+  useEffect(() => {
     if (isAuthenticated && activeTab === 'files') {
       loadFiles()
     }
@@ -181,39 +187,41 @@ const AppContent: React.FC = () => {
                   <MessageSquare className="mr-2 h-4 w-4" />
                   Chat
                 </Button>
-                <Button
-                  variant={activeTab === 'files' ? 'default' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => setActiveTab('files')}
-                >
-                  <FileText className="mr-2 h-4 w-4" />
-                  Files
-                </Button>
-                <Button
-                  variant={activeTab === 'history' ? 'default' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => setActiveTab('history')}
-                >
-                  <History className="mr-2 h-4 w-4" />
-                  History
-                </Button>
-                <Button
-                  variant={activeTab === 'stats' ? 'default' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => setActiveTab('stats')}
-                >
-                  <BarChart3 className="mr-2 h-4 w-4" />
-                  Statistics
-                </Button>
                 {user?.role === 'admin' && (
-                  <Button
-                    variant={activeTab === 'admin' ? 'default' : 'ghost'}
-                    className="w-full justify-start"
-                    onClick={() => setActiveTab('admin')}
-                  >
-                    <Users className="mr-2 h-4 w-4" />
-                    Admin
-                  </Button>
+                  <>
+                    <Button
+                      variant={activeTab === 'files' ? 'default' : 'ghost'}
+                      className="w-full justify-start"
+                      onClick={() => setActiveTab('files')}
+                    >
+                      <FileText className="mr-2 h-4 w-4" />
+                      Files
+                    </Button>
+                    <Button
+                      variant={activeTab === 'history' ? 'default' : 'ghost'}
+                      className="w-full justify-start"
+                      onClick={() => setActiveTab('history')}
+                    >
+                      <History className="mr-2 h-4 w-4" />
+                      History
+                    </Button>
+                    <Button
+                      variant={activeTab === 'stats' ? 'default' : 'ghost'}
+                      className="w-full justify-start"
+                      onClick={() => setActiveTab('stats')}
+                    >
+                      <BarChart3 className="mr-2 h-4 w-4" />
+                      Statistics
+                    </Button>
+                    <Button
+                      variant={activeTab === 'admin' ? 'default' : 'ghost'}
+                      className="w-full justify-start"
+                      onClick={() => setActiveTab('admin')}
+                    >
+                      <Users className="mr-2 h-4 w-4" />
+                      Admin
+                    </Button>
+                  </>
                 )}
               </nav>
             </Card>
@@ -232,8 +240,8 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             )}
 
-            {activeTab === 'files' && (
-              <ProtectedRoute>
+            {activeTab === 'files' && user?.role === 'admin' && (
+              <ProtectedRoute requiredRole="admin">
                 <div className="space-y-6">
                   <Card>
                     <div className="p-6">
@@ -261,14 +269,14 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             )}
 
-            {activeTab === 'history' && (
-              <ProtectedRoute>
+            {activeTab === 'history' && user?.role === 'admin' && (
+              <ProtectedRoute requiredRole="admin">
                 <QuestionHistory />
               </ProtectedRoute>
             )}
 
-            {activeTab === 'stats' && (
-              <ProtectedRoute>
+            {activeTab === 'stats' && user?.role === 'admin' && (
+              <ProtectedRoute requiredRole="admin">
                 <RAGStats />
               </ProtectedRoute>
             )}

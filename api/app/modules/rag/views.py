@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile
 
 from app.core.schema import MessageResponse
-from app.modules.auth.middleware import get_current_user
+from app.modules.auth.middleware import get_current_admin_user, get_current_user
 from app.modules.auth.models import User
 from app.modules.rag.schema import (
     AnswerResponse,
@@ -37,7 +37,7 @@ async def ask_voice_question(
 
 @router.get("/history")
 async def get_question_history(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_admin_user)],
     document_service: Annotated[DocumentService, Depends(DocumentService)],
     limit: int = Query(default=50, le=100),
 ) -> list[QAPairResponse]:
@@ -47,7 +47,7 @@ async def get_question_history(
 @router.get("/session/{session_id}", response_model=list[QAPairResponse])
 async def get_session_history(
     session_id: str,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_admin_user)],
     document_service: Annotated[DocumentService, Depends(DocumentService)],
 ) -> list[QAPairResponse]:
     return await document_service.get_session_history(session_id)
@@ -56,7 +56,7 @@ async def get_session_history(
 @router.delete("/question/{question_id}")
 async def delete_question(
     question_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_admin_user)],
     document_service: Annotated[DocumentService, Depends(DocumentService)],
 ) -> MessageResponse:
     success = await document_service.delete_question(question_id)
@@ -69,7 +69,7 @@ async def delete_question(
 
 @router.get("/stats")
 async def get_user_stats(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_admin_user)],
     document_service: Annotated[DocumentService, Depends(DocumentService)],
 ) -> QuestionStats:
     return await document_service.get_user_stats(current_user.id)
