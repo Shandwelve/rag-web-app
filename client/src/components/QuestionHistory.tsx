@@ -7,6 +7,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RAGService, type QAPairResponse } from '@/services/ragService'
 
+let historyFetchPromise: Promise<void> | null = null
+
 export function QuestionHistory() {
   const [history, setHistory] = useState<QAPairResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -25,7 +27,32 @@ export function QuestionHistory() {
   }
 
   useEffect(() => {
-    fetchHistory()
+    if (historyFetchPromise) return
+    
+    const abortController = new AbortController()
+    
+    historyFetchPromise = (async () => {
+      setIsLoading(true)
+      try {
+        const data = await RAGService.getQuestionHistory(50)
+        if (!abortController.signal.aborted) {
+          setHistory(data)
+        }
+      } catch (error) {
+        if (!abortController.signal.aborted) {
+          console.error('Error fetching history:', error)
+        }
+      } finally {
+        if (!abortController.signal.aborted) {
+          setIsLoading(false)
+        }
+        historyFetchPromise = null
+      }
+    })()
+
+    return () => {
+      abortController.abort()
+    }
   }, [])
 
   const handleDelete = async (questionId: number) => {

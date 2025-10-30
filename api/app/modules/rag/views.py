@@ -41,9 +41,7 @@ async def get_question_history(
     document_service: Annotated[DocumentService, Depends(DocumentService)],
     limit: int = Query(default=50, le=100),
 ) -> list[QAPairResponse]:
-    qa_pairs = await document_service.get_question_history(current_user.id, limit)
-
-    return [QAPairResponse(question=qa_pair["question"], answer=qa_pair["answer"]) for qa_pair in qa_pairs]
+    return await document_service.get_question_history(current_user.id, limit)
 
 
 @router.get("/session/{session_id}", response_model=list[QAPairResponse])
@@ -52,9 +50,7 @@ async def get_session_history(
     current_user: Annotated[User, Depends(get_current_user)],
     document_service: Annotated[DocumentService, Depends(DocumentService)],
 ) -> list[QAPairResponse]:
-    qa_pairs = await document_service.get_session_history(session_id)
-
-    return [QAPairResponse(question=qa_pair["question"], answer=qa_pair["answer"]) for qa_pair in qa_pairs]
+    return await document_service.get_session_history(session_id)
 
 
 @router.delete("/question/{question_id}")

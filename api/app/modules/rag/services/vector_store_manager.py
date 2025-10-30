@@ -1,7 +1,6 @@
 from typing import Annotated, Any
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from fastapi import Depends
 
 from app.core.logging import get_logger
@@ -18,17 +17,28 @@ class VectorStoreManager:
     ) -> None:
         logger.info("Initializing VectorStoreManager with pgvector")
         self._repository = repository
-        
+
         try:
             logger.debug("Loading embedding model: all-MiniLM-L6-v2")
             try:
-                self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
-            except Exception as model_error:
-                logger.warning(f"Failed to load model with device specification: {model_error}, trying without device")
+                from sentence_transformers import SentenceTransformer
                 import torch
                 torch.set_default_device("cpu")
-                self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+                self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+
+            except Exception as model_error:
+                logger.warning(
+                    f"Failed to load model with device specification: {model_error}, trying fallback initialization"
+                )
+
+                from torch.nn import Module
+                from sentence_transformers import SentenceTransformer
+
+                model = SentenceTransformer("all-MiniLM-L6-v2", device="meta")
+                self.embedding_model = model.to_empty(device="cpu")
+
             logger.info("Embedding model loaded successfully")
+
         except Exception as e:
             logger.error(f"Error initializing VectorStoreManager: {str(e)}", exc_info=True)
             raise

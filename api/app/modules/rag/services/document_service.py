@@ -18,6 +18,9 @@ from app.modules.rag.schema import (
     QuestionStats,
     RAGResult,
     SourceReference,
+    QAPairResponse,
+    QuestionResponse,
+    QAResponse,
 )
 from app.modules.rag.services.audio_processing_service import AudioProcessingService
 from app.modules.rag.services.openai_service import OpenAIService
@@ -174,18 +177,38 @@ class DocumentService:
             question_id=question_id,
         )
 
-    async def get_question_history(self, user_id: int, limit: int = 50) -> list[dict]:
+    async def get_question_history(self, user_id: int, limit: int = 50) -> list[QAPairResponse]:
         qa_pairs = await self.qa_repository.get_qa_pairs_by_user(user_id, limit)
-        return [{"question": qa_pair[0], "answer": qa_pair[1]} for qa_pair in qa_pairs]
+        result = []
+        for qa_pair in qa_pairs:
+            question_dict = qa_pair[0].model_dump()
+            answer_dict = qa_pair[1].model_dump()
+            if answer_dict.get("processing_time_ms") is not None:
+                answer_dict["processing_time_ms"] = str(answer_dict["processing_time_ms"])
+            result.append(
+                QAPairResponse(
+                    question=QuestionResponse.model_validate(question_dict),
+                    answer=QAResponse.model_validate(answer_dict)
+                )
+            )
+        return result
 
-    async def get_session_history(self, session_id: str) -> list[dict]:
+    async def get_session_history(self, session_id: str) -> list[QAPairResponse]:
         questions = await self.qa_repository.get_questions_by_session(session_id)
         qa_pairs = []
 
         for question in questions:
             answers = await self.qa_repository.get_answers_by_question_id(question.id)
             if answers:
-                qa_pairs.append({"question": question, "answer": answers[0]})
+                answer_dict = answers[0].model_dump()
+                if answer_dict.get("processing_time_ms") is not None:
+                    answer_dict["processing_time_ms"] = str(answer_dict["processing_time_ms"])
+                qa_pairs.append(
+                    QAPairResponse(
+                        question=QuestionResponse.model_validate(question.model_dump()),
+                        answer=QAResponse.model_validate(answer_dict)
+                    )
+                )
 
         return qa_pairs
 

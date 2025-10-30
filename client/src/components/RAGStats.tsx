@@ -4,24 +4,39 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton'
 import { RAGService, type QuestionStats } from '@/services/ragService'
 
+let statsFetchPromise: Promise<void> | null = null
+
 export function RAGStats() {
   const [stats, setStats] = useState<QuestionStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const fetchStats = async () => {
+    if (statsFetchPromise) return
+    
+    const abortController = new AbortController()
+    
+    statsFetchPromise = (async () => {
       setIsLoading(true)
       try {
         const data = await RAGService.getStats()
-        setStats(data)
+        if (!abortController.signal.aborted) {
+          setStats(data)
+        }
       } catch (error) {
-        console.error('Error fetching stats:', error)
+        if (!abortController.signal.aborted) {
+          console.error('Error fetching stats:', error)
+        }
       } finally {
-        setIsLoading(false)
+        if (!abortController.signal.aborted) {
+          setIsLoading(false)
+        }
+        statsFetchPromise = null
       }
-    }
+    })()
 
-    fetchStats()
+    return () => {
+      abortController.abort()
+    }
   }, [])
 
   return (
