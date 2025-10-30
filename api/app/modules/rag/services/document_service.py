@@ -333,6 +333,7 @@ class DocumentService:
 
     def _build_sources(self, search_results: list[dict[str, Any]]) -> list[SourceReference]:
         sources = []
+        seen_sources = set()
         top_results = search_results[:3]
         relevance_threshold = 0.6
         
@@ -342,12 +343,21 @@ class DocumentService:
                 continue
                 
             metadata = result["metadata"]
+            file_id = metadata.get("file_id", 0)
+            chunk_index = metadata.get("chunk_index", 0)
+            page_number = metadata.get("page_number")
+            
+            source_key = (file_id, chunk_index, page_number)
+            if source_key in seen_sources:
+                continue
+            
+            seen_sources.add(source_key)
             sources.append(
                 SourceReference(
-                    file_id=metadata.get("file_id", 0),
+                    file_id=file_id,
                     filename=metadata.get("filename", "Unknown"),
-                    page_number=metadata.get("page_number"),
-                    chunk_index=metadata.get("chunk_index", 0),
+                    page_number=page_number,
+                    chunk_index=chunk_index,
                     relevance_score=1.0 - distance,
                 )
             )
@@ -377,6 +387,10 @@ class DocumentService:
 
                 if chunk_index in chunk_images:
                     for img_b64 in chunk_images[chunk_index]:
+                        if img_b64 in seen_image_b64:
+                            continue
+                        
+                        seen_image_b64.add(img_b64)
                         images.append(
                             ImageReference(
                                 image_path=f"data:image/png;base64,{img_b64}",
