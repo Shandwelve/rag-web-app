@@ -18,8 +18,7 @@ class Settings(BaseSettings):
     WORKOS_API_KEY: str = ""
     WORKOS_CLIENT_ID: str = ""
     WORKOS_REDIRECT_URI: str = ""
-    WORKOS_STATE_SECRET: str = ""
-    WORKOS_STATE_TIMEOUT: int = 600
+    WORKOS_COOKIE_PASSWORD: str = ""
     FRONTEND_URL: str = ""
 
     JWT_SECRET_KEY: str = ""

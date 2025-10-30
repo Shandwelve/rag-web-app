@@ -2,51 +2,20 @@ import { apiFetch } from '@/utils/api'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
-export interface LoginResponse {
-  access_token: string
-  token_type: string
-}
-
 export interface User {
   id: number
-  workos_id: string
-  email: string
+  workos_id: string | null
+  email: string | null
   role: 'user' | 'admin'
 }
 
 export class AuthService {
-  static async getLoginUrl(provider: string = 'GoogleOAuth'): Promise<{ authorization_url: string }> {
-    const response = await fetch(`${API_BASE_URL}/auth/login?provider=${encodeURIComponent(provider)}`)
+  static async getLoginUrl(): Promise<{ authorization_url: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      credentials: 'include',
+    })
     if (!response.ok) {
       throw new Error('Failed to get login URL')
-    }
-    return response.json()
-  }
-
-  static async handleCallback(code: string, state: string): Promise<LoginResponse> {
-    const response = await fetch(`${API_BASE_URL}/auth/exchange`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ code, state }),
-    })
-    if (!response.ok) {
-      throw new Error('Authentication failed')
-    }
-    return response.json()
-  }
-
-  static async refreshToken(token: string): Promise<LoginResponse> {
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ token }),
-    })
-    if (!response.ok) {
-      throw new Error('Token refresh failed')
     }
     return response.json()
   }
@@ -57,5 +26,17 @@ export class AuthService {
       throw new Error('Failed to get user info')
     }
     return response.json()
+  }
+
+  static async logout(): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: 'GET',
+      credentials: 'include',
+    })
+    if (!response.ok) {
+      throw new Error('Logout failed')
+    }
+    // The backend will redirect, but we handle it client-side too
+    window.location.href = window.location.origin
   }
 }

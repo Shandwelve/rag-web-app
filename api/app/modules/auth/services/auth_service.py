@@ -1,24 +1,18 @@
-from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any
+from typing import Annotated
 
 import workos
 from fastapi import Depends
-from jose import JWTError, jwt
-from workos.types.sso import SsoProviderType
 
 from app.core.config import settings
 from app.modules.auth.exceptions import AuthenticationError
 from app.modules.auth.models import User
 from app.modules.auth.repository import UserRepository
 from app.modules.auth.schema import (
-    Token,
-    TokenData,
     UserCreate,
     UserListResponse,
     UserResponse,
     UserRole,
     UserUpdate,
-    WorkOSUser,
 )
 
 
@@ -30,65 +24,78 @@ class AuthService:
         self.client = workos.WorkOSClient(api_key=settings.WORKOS_API_KEY, client_id=settings.WORKOS_CLIENT_ID)
         self.user_repository = user_repository
 
-    def create_access_token(self, data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
-        to_encode = data.copy()
-        if expires_delta:
-            expire = datetime.now(UTC) + expires_delta
-        else:
-            expire = datetime.now(UTC) + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-        to_encode.update({"exp": expire})
-        encoded_jwt: str = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-        return encoded_jwt
-
-    def verify_token(self, token: str) -> TokenData:
-        try:
-            payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-            workos_id: str = payload.get("sub")
-            if workos_id is None:
-                raise AuthenticationError("Invalid token")
-            return TokenData(workos_id=workos_id)
-        except JWTError:
-            raise AuthenticationError("Invalid token")
-
-    def get_authorization_url(self, state: str, provider: SsoProviderType) -> str:
-        return self.client.sso.get_authorization_url(
+    def get_authorization_url(self) -> str:
+        return self.client.user_management.get_authorization_url(
+            provider="authkit",
             redirect_uri=settings.WORKOS_REDIRECT_URI,
-            state=state,
-            provider=provider,
         )
 
-    def get_user_info(self, code: str) -> WorkOSUser:
+    def load_sealed_session(self, sealed_session: str | None):
+        """Load and return a sealed session object"""
+        if not sealed_session:
+            return None
         try:
-            profile = self.client.sso.get_profile_and_token(code=code)
-            user_info = profile.profile
-
-            return WorkOSUser(
-                workos_id=user_info.id,
-                email=user_info.email,
-                first_name=user_info.first_name,
-                last_name=user_info.last_name,
+            return self.client.user_management.load_sealed_session(
+                sealed_session=sealed_session,
+                cookie_password=settings.WORKOS_COOKIE_PASSWORD,
             )
-        except Exception as e:
-            raise AuthenticationError(f"Failed to get user info: {str(e)}")
+        except Exception:
+            return None
 
-    async def get_or_create_user(self, workos_user: WorkOSUser) -> User:
-        user = await self.user_repository.get_by_workos_id(workos_user.workos_id)
+    def authenticate_with_code(self, code: str) -> str:
+        """Authenticate with authorization code and return sealed session"""
+        if not settings.WORKOS_COOKIE_PASSWORD:
+            raise AuthenticationError("WORKOS_COOKIE_PASSWORD is not configured. Please set it in your .env file.")
+        
+        # Validate Fernet key format (should be 43-44 characters of URL-safe base64)
+        cookie_password = settings.WORKOS_COOKIE_PASSWORD.strip()
+        if len(cookie_password) < 43:
+            raise AuthenticationError(
+                "WORKOS_COOKIE_PASSWORD must be a Fernet key (32 bytes URL-safe base64 encoded, 43-44 characters). "
+                "Generate one with: python3 -c \"import secrets, base64; key = secrets.token_bytes(32); print(base64.urlsafe_b64encode(key).decode())\""
+            )
+        
+        try:
+            auth_response = self.client.user_management.authenticate_with_code(
+                code=code,
+                session={"seal_session": True, "cookie_password": cookie_password},
+            )
+            return auth_response.sealed_session
+        except Exception as e:
+            error_msg = str(e)
+            if "Fernet key" in error_msg:
+                raise AuthenticationError(
+                    f"{error_msg}. Generate a valid Fernet key with: "
+                    "python3 -c \"import secrets, base64; key = secrets.token_bytes(32); print(base64.urlsafe_b64encode(key).decode())\""
+                )
+            raise AuthenticationError(f"Failed to authenticate with code: {error_msg}")
+
+    async def get_or_create_user_from_workos_user(self, workos_user_id: str, email: str) -> User:
+        user = await self.user_repository.get_by_workos_id(workos_user_id)
 
         if user:
-            user.email = workos_user.email
-            return await self.user_repository.update(user)
+            if user.email != email:
+                user.email = email
+                return await self.user_repository.update(user)
+            return user
 
         user = User(
-            workos_id=workos_user.workos_id,
-            email=workos_user.email,
+            workos_id=workos_user_id,
+            email=email,
             role=UserRole.USER,
         )
         return await self.user_repository.create(user)
 
-    async def authenticate_user(self, workos_user: WorkOSUser) -> Token:
-        user = await self.get_or_create_user(workos_user)
-        access_token = self.create_access_token(data={"sub": user.workos_id})
-        return Token(access_token=access_token, token_type="bearer")
+    def get_logout_url(self, sealed_session: str | None) -> str | None:
+        if not sealed_session:
+            return None
+        try:
+            session = self.load_sealed_session(sealed_session)
+            if session:
+                return session.get_logout_url()
+        except Exception:
+            pass
+        return None
 
     async def create_user(self, user_data: UserCreate) -> UserResponse:
         existing_user = await self.user_repository.get_by_email(user_data.email)

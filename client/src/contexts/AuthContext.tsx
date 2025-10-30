@@ -1,16 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-
-interface User {
-  id: number
-  workos_id: string
-  email: string
-  role: 'user' | 'admin'
-}
+import { AuthService } from '../services/authService'
+import type { User } from '../services/authService'
 
 interface AuthContextType {
   user: User | null
-  token: string | null
-  login: (token: string, user: User) => void
+  login: (user: User) => void
   logout: () => void
   isAuthenticated: boolean
   isLoading: boolean
@@ -32,40 +26,52 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
-  const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('auth_token')
-    const storedUser = localStorage.getItem('auth_user')
-    
-    if (storedToken && storedUser) {
-      setToken(storedToken)
-      setUser(JSON.parse(storedUser))
+    const checkAuth = async () => {
+      try {
+        const currentUser = await AuthService.getCurrentUser()
+        setUser(currentUser)
+        // Store user in localStorage for quick access
+        localStorage.setItem('auth_user', JSON.stringify(currentUser))
+      } catch (error) {
+        // User is not authenticated or session expired - this is normal for unauthenticated users
+        setUser(null)
+        localStorage.removeItem('auth_user')
+        // Don't log errors for unauthenticated users - it's expected
+        if (error instanceof Error && !error.message.includes('Unauthorized')) {
+          console.error('Auth check error:', error)
+        }
+      } finally {
+        setIsLoading(false)
+      }
     }
-    setIsLoading(false)
+
+    checkAuth()
   }, [])
 
-  const login = (newToken: string, newUser: User) => {
-    setToken(newToken)
+  const login = (newUser: User) => {
     setUser(newUser)
-    localStorage.setItem('auth_token', newToken)
     localStorage.setItem('auth_user', JSON.stringify(newUser))
   }
 
-  const logout = () => {
-    setToken(null)
-    setUser(null)
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('auth_user')
+  const logout = async () => {
+    try {
+      await AuthService.logout()
+    } catch (error) {
+      console.error('Logout error:', error)
+    } finally {
+      setUser(null)
+      localStorage.removeItem('auth_user')
+    }
   }
 
-  const isAuthenticated = !!user && !!token
+  const isAuthenticated = !!user
 
   return (
     <AuthContext.Provider value={{
       user,
-      token,
       login,
       logout,
       isAuthenticated,

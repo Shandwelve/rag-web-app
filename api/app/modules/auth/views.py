@@ -1,19 +1,15 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
-from workos.types.sso import SsoProviderType
 
 from app.core.config import settings
 from app.core.schema import MessageResponse
 from app.modules.auth.exceptions import AuthenticationError
 from app.modules.auth.middleware import get_current_admin_user, get_current_user
 from app.modules.auth.models import User
-from app.modules.auth.repository import UserRepository
 from app.modules.auth.schema import (
     LoginResponse,
-    Token,
-    TokenExchangeRequest,
     UserCreate,
     UserInfo,
     UserListResponse,
@@ -21,7 +17,6 @@ from app.modules.auth.schema import (
     UserUpdate,
 )
 from app.modules.auth.services.auth_service import AuthService
-from app.modules.auth.services.state_manager import StateManager
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -29,46 +24,63 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 @router.get("/login")
 async def login(
     auth_service: Annotated[AuthService, Depends(AuthService)],
-    state_manager: Annotated[StateManager, Depends(StateManager)],
-    provider: SsoProviderType = "GoogleOAuth",
 ) -> LoginResponse:
-    state = state_manager.generate_state()
-    authorization_url = auth_service.get_authorization_url(state, provider)
+    authorization_url = auth_service.get_authorization_url()
     return LoginResponse(authorization_url=authorization_url)
 
 
 @router.get("/callback")
 async def callback(
     code: str,
-    state: str,
-    state_manager: Annotated[StateManager, Depends(StateManager)],
-) -> RedirectResponse:
-    if not state_manager.validate_state(state):
-        error_url = f"{settings.FRONTEND_URL}?error=invalid_state"
-        return RedirectResponse(url=error_url)
-
-    redirect_url = f"{settings.FRONTEND_URL}?code={code}&state={state}"
-    return RedirectResponse(url=redirect_url)
-
-
-@router.post("/exchange")
-async def exchange_token(
-    request: TokenExchangeRequest,
     auth_service: Annotated[AuthService, Depends(AuthService)],
-    state_manager: Annotated[StateManager, Depends(StateManager)],
-) -> Token:
+) -> RedirectResponse:
     try:
-        if not state_manager.validate_state(request.state):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired state parameter",
-            )
-
-        workos_user = auth_service.get_user_info(request.code)
-        token = await auth_service.authenticate_user(workos_user)
-        return token
+        sealed_session = auth_service.authenticate_with_code(code)
+        
+        session = auth_service.load_sealed_session(sealed_session)
+        if not session:
+            return RedirectResponse(url=f"{settings.FRONTEND_URL}?error=auth_failed")
+        
+        auth_response = session.authenticate()
+        if not auth_response.authenticated or not auth_response.user:
+            return RedirectResponse(url=f"{settings.FRONTEND_URL}?error=auth_failed")
+        
+        workos_user = auth_response.user
+        await auth_service.get_or_create_user_from_workos_user(
+            workos_user_id=workos_user.id,
+            email=workos_user.email if workos_user.email else "",
+        )
+        
+        response = RedirectResponse(url=settings.FRONTEND_URL)
+        response.set_cookie(
+            "wos_session",
+            sealed_session,
+            secure=False,
+            httponly=True,
+            samesite="lax",
+        )
+        return response
     except AuthenticationError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}?error={str(e)}")
+    except Exception as e:
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}?error=auth_failed")
+
+
+@router.get("/logout")
+async def logout(
+    request: Request,
+    auth_service: Annotated[AuthService, Depends(AuthService)],
+) -> RedirectResponse:
+    sealed_session = request.cookies.get("wos_session")
+    logout_url = auth_service.get_logout_url(sealed_session)
+    
+    if logout_url:
+        response = RedirectResponse(url=logout_url)
+    else:
+        response = RedirectResponse(url=settings.FRONTEND_URL)
+    
+    response.delete_cookie("wos_session")
+    return response
 
 
 @router.get("/me")
@@ -81,26 +93,6 @@ async def get_current_user_info(
         email=current_user.email,
         role=current_user.role,
     )
-
-
-@router.post("/refresh")
-async def refresh_token(
-    token: str,
-    user_repository: Annotated[UserRepository, Depends(UserRepository)],
-    auth_service: Annotated[AuthService, Depends(AuthService)],
-) -> Token:
-    try:
-        token_data = auth_service.verify_token(token)
-        user = await user_repository.get_by_workos_id(token_data.workos_id)
-
-        if user is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-
-        new_token = auth_service.create_access_token(data={"sub": user.workos_id})
-        return Token(access_token=new_token, token_type="bearer")
-    except AuthenticationError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
-
 
 @router.post("/users", response_model=UserResponse)
 async def create_user(

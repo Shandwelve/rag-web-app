@@ -26,46 +26,46 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     const handleAuthCallback = async () => {
-      // Prevent duplicate processing
-      if (authCallbackProcessed.current) {
+      // Only process callback if we're not loading and haven't processed yet
+      if (isLoading || authCallbackProcessed.current) {
         return
       }
 
       const urlParams = new URLSearchParams(window.location.search)
-      const code = urlParams.get('code')
-      const state = urlParams.get('state')
       const error = urlParams.get('error')
-      const errorMessage = urlParams.get('message')
       
       // Handle error cases
       if (error) {
         authCallbackProcessed.current = true
-        console.error('Authentication error:', error, errorMessage)
-        setFilesError(errorMessage || `Authentication failed: ${error}`)
+        console.error('Authentication error:', error)
+        setFilesError(`Authentication failed: ${error}`)
         window.history.replaceState({}, document.title, window.location.pathname)
         return
       }
       
-      if (code && state && !isAuthenticated && !authCallbackProcessed.current) {
+      // Check if we have a code parameter (from WorkOS redirect)
+      // If backend already handled it, we should just check auth status
+      const code = urlParams.get('code')
+      if (code) {
+        // Backend should have handled this, but let's verify auth
         authCallbackProcessed.current = true
         try {
-          const tokenResponse = await AuthService.handleCallback(code, state)
-          // Save token to localStorage immediately so apiFetch can use it
-          localStorage.setItem('auth_token', tokenResponse.access_token)
           const userResponse = await AuthService.getCurrentUser()
-          login(tokenResponse.access_token, userResponse)
-          
+          login(userResponse)
           window.history.replaceState({}, document.title, window.location.pathname)
         } catch (error) {
           console.error('Authentication callback failed:', error)
-          setFilesError('Authentication failed')
+          setFilesError('Authentication failed - please try logging in again')
           authCallbackProcessed.current = false // Allow retry on error
         }
       }
     }
 
-    handleAuthCallback()
-  }, [isAuthenticated, login])
+    // Only run callback handler after loading is complete
+    if (!isLoading) {
+      handleAuthCallback()
+    }
+  }, [isLoading, isAuthenticated, login])
 
   useEffect(() => {
     if (isAuthenticated && user?.role === 'user' && activeTab !== 'chat') {
@@ -129,7 +129,7 @@ const AppContent: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-gray-50 to-white">
         <Card className="p-10 max-w-lg w-full shadow-lg border-0">
-          {/* Icon in?gradient container */}
+          {/* Icon in gradient container */}
           <div className="flex justify-center mb-6">
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-300 to-white flex items-center justify-center shadow-md">
               <Lock className="h-10 w-10 text-gray-700" />
@@ -144,11 +144,16 @@ const AppContent: React.FC = () => {
             </p>
           </div>
           
+          {/* Error message */}
+          {filesError && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-600">{filesError}</p>
+            </div>
+          )}
+          
           {/* Login buttons */}
           <div className="space-y-3">
-            <LoginButton provider="GoogleOAuth" />
-            <LoginButton provider="MicrosoftOAuth" />
-            <LoginButton provider="GitHubOAuth" />
+            <LoginButton />
           </div>
         </Card>
       </div>

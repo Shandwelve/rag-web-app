@@ -1,7 +1,6 @@
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, HTTPException, Request, status
 
 from app.modules.auth.exceptions import AuthenticationError
 from app.modules.auth.models import User
@@ -9,24 +8,61 @@ from app.modules.auth.repository import UserRepository
 from app.modules.auth.schema import UserRole
 from app.modules.auth.services.auth_service import AuthService
 
-security = HTTPBearer()
-
 
 async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+    request: Request,
     user_repository: Annotated[UserRepository, Depends(UserRepository)],
     auth_service: Annotated[AuthService, Depends(AuthService)],
 ) -> User:
-    try:
-        token_data = auth_service.verify_token(credentials.credentials)
-        user = await user_repository.get_by_workos_id(token_data.workos_id)
-
-        if user is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-
-        return user
-    except AuthenticationError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    sealed_session = request.cookies.get("wos_session")
+    
+    if not sealed_session:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No session cookie provided")
+    
+    session = auth_service.load_sealed_session(sealed_session)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session")
+    
+    auth_response = session.authenticate()
+    
+    if not auth_response.authenticated:
+        # Try to refresh the session
+        if auth_response.reason == "no_session_cookie_provided":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No session cookie provided")
+        
+        try:
+            refresh_result = session.refresh()
+            if not refresh_result.authenticated:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired")
+            
+            # Update the session cookie in the response
+            # Note: This requires storing the response somewhere, but FastAPI doesn't allow
+            # modifying response cookies directly in middleware. For now, we'll just raise
+            # and let the client handle refresh
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session expired - please refresh",
+                headers={"X-Session-Refresh": refresh_result.sealed_session} if hasattr(refresh_result, 'sealed_session') else {},
+            )
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Authentication failed: {str(e)}")
+    
+    if not auth_response.user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found in session")
+    
+    workos_user = auth_response.user
+    user = await user_repository.get_by_workos_id(workos_user.id)
+    
+    if user is None:
+        # Create user if doesn't exist
+        user = User(
+            workos_id=workos_user.id,
+            email=workos_user.email if workos_user.email else "",
+            role=UserRole.USER,
+        )
+        user = await user_repository.create(user)
+    
+    return user
 
 
 async def get_current_admin_user(

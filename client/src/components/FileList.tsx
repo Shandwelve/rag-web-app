@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { File, Download, Trash2, CheckCircle, AlertCircle, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
