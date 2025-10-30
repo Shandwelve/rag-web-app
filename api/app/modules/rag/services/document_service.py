@@ -25,7 +25,7 @@ from app.modules.rag.schema import (
     SourceReference,
 )
 from app.modules.rag.services.audio_processing_service import AudioProcessingService
-from app.modules.rag.services.content_manager import (
+from app.modules.rag.services import (
     DOCXContentManager,
     PDFContentManager,
 )
