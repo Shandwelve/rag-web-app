@@ -1,7 +1,7 @@
 """Add document_chunks with pgvector
 
 Revision ID: 53e4fe25775
-Revises: 637967eb846a
+Revises: f4ee5d9f4847
 Create Date: 2025-01-27 12:00:00.000000
 
 """
@@ -11,7 +11,12 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 import sqlmodel
-from pgvector.sqlalchemy import Vector
+
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    # Fallback if pgvector is not available during migration loading
+    Vector = sa.String  # Will be replaced with actual Vector type in the migration
 
 
 # revision identifiers, used by Alembic.
@@ -26,14 +31,14 @@ def upgrade() -> None:
     # Enable pgvector extension
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
     
-    # Create document_chunks table
+    # Create document_chunks table with embedding as ARRAY first, then convert to vector
     op.create_table(
         "document_chunks",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.Column("text", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column("embedding", Vector(384), nullable=False),
+        sa.Column("embedding", sa.dialects.postgresql.ARRAY(sa.Float()), nullable=False),
         sa.Column("file_id", sa.Integer(), nullable=False),
         sa.Column("chunk_index", sa.Integer(), nullable=False),
         sa.Column("page_number", sa.Integer(), nullable=True),
@@ -50,6 +55,9 @@ def upgrade() -> None:
     op.create_index(
         op.f("ix_document_chunks_file_id"), "document_chunks", ["file_id"], unique=False
     )
+    
+    # Convert the embedding column to vector type using raw SQL
+    op.execute("ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(384) USING embedding::vector")
     
     # Create vector index for similarity search (using HNSW for better performance)
     op.execute(

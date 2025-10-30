@@ -40,11 +40,10 @@ class QARepository(Repository):
         )
         return list(result.all())
 
-    async def get_qa_pairs_by_user(self, user_id: int, limit: int = 50) -> list[tuple[Question, Answer]]:
+    async def get_qa_pairs(self, limit: int = 50) -> list[tuple[Question, Answer]]:
         result = await self._session.exec(
             select(Question, Answer)
             .join(Answer, Question.id == Answer.question_id)
-            .where(Question.user_id == user_id)
             .order_by(Question.created_at.desc())
             .limit(limit)
         )
@@ -53,6 +52,10 @@ class QARepository(Repository):
     async def delete_question(self, question_id: int) -> bool:
         question = await self.get_question_by_id(question_id)
         if question:
+            answers = await self.get_answers_by_question_id(question_id)
+            for answer in answers:
+                await self._session.delete(answer)
+
             await self._session.delete(question)
             await self._session.commit()
             return True

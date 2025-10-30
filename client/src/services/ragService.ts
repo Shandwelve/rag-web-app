@@ -48,6 +48,7 @@ export interface QAResponse {
 export interface QAPairResponse {
   question: QuestionResponse
   answer: QAResponse
+  images: ImageReference[]
 }
 
 export interface QuestionStats {

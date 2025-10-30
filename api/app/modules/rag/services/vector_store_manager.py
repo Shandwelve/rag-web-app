@@ -5,7 +5,7 @@ from fastapi import Depends
 
 from app.core.logging import get_logger
 from app.modules.rag.models import DocumentChunk
-from app.modules.rag.document_chunk_repository import DocumentChunkRepository
+from app.modules.rag.repositories.document_chunk import DocumentChunkRepository
 
 logger = get_logger(__name__)
 
@@ -21,8 +21,9 @@ class VectorStoreManager:
         try:
             logger.debug("Loading embedding model: all-MiniLM-L6-v2")
             try:
-                from sentence_transformers import SentenceTransformer
                 import torch
+                from sentence_transformers import SentenceTransformer
+
                 torch.set_default_device("cpu")
                 self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
 
@@ -31,7 +32,6 @@ class VectorStoreManager:
                     f"Failed to load model with device specification: {model_error}, trying fallback initialization"
                 )
 
-                from torch.nn import Module
                 from sentence_transformers import SentenceTransformer
 
                 model = SentenceTransformer("all-MiniLM-L6-v2", device="meta")
@@ -49,7 +49,7 @@ class VectorStoreManager:
             texts = [doc["text"] for doc in documents]
             logger.debug(f"Generating embeddings for {len(texts)} texts")
             embeddings = self.embedding_model.encode(texts).tolist()
-            
+
             chunk_objects = []
             for doc, embedding in zip(documents, embeddings, strict=True):
                 metadata = doc.get("metadata", {})
@@ -62,7 +62,7 @@ class VectorStoreManager:
                     chunk_metadata=metadata,
                 )
                 chunk_objects.append(chunk)
-            
+
             await self._repository.create_batch(chunk_objects)
             logger.info(f"Successfully added {len(documents)} documents to vector store")
         except Exception as e:
@@ -75,7 +75,7 @@ class VectorStoreManager:
             query_embedding = self.embedding_model.encode([query])[0].tolist()
 
             chunks = await self._repository.search_by_embedding(query_embedding, n_results)
-            
+
             search_results = []
             for chunk in chunks:
                 embedding_array = np.array(chunk.embedding)
@@ -84,7 +84,7 @@ class VectorStoreManager:
                     np.linalg.norm(embedding_array) * np.linalg.norm(query_array)
                 )
                 distance = 1.0 - cosine_sim
-                
+
                 if chunk.chunk_metadata:
                     metadata = chunk.chunk_metadata.copy()
                     metadata.setdefault("file_id", chunk.file_id)
@@ -97,16 +97,19 @@ class VectorStoreManager:
                         "chunk_index": chunk.chunk_index,
                         "page_number": chunk.page_number,
                     }
-                
-                search_results.append({
-                    "text": chunk.text,
-                    "metadata": metadata,
-                    "distance": float(distance),
-                })
+
+                search_results.append(
+                    {
+                        "text": chunk.text,
+                        "metadata": metadata,
+                        "distance": float(distance),
+                    }
+                )
 
             result_count = len(search_results)
             logger.info(f"Vector search completed. Found {result_count} results")
-            logger.debug(f"Result distances: {[round(r['distance'], 4) for r in search_results[:3]] if search_results else 'N/A'}")
+            distances = [round(r["distance"], 4) for r in search_results[:3]] if search_results else "N/A"
+            logger.debug(f"Result distances: {distances}")
 
             return search_results
         except Exception as e:

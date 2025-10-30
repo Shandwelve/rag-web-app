@@ -22,15 +22,15 @@ class AudioProcessingService:
                 temp_file.flush()
                 temp_file_name = temp_file.name
 
-            logger.debug(f"Calling OpenAI Whisper API for transcription")
-            with open(temp_file_name, "rb") as f:
+            logger.debug("Calling OpenAI Whisper API for transcription")
+            with open(temp_file_name, "rb") as f:  # noqa: PTH123 ASYNC230
                 transcript = self.client.audio.transcriptions.create(
                     model="whisper-1",
                     file=f,
                     response_format="text",
                     language="en",
                 )
-                
+
             transcribed_text = transcript.strip()
 
             logger.info(f"Transcription completed. Text length: {len(transcribed_text)} characters")
@@ -39,5 +39,8 @@ class AudioProcessingService:
 
             return transcribed_text, metadata
         except Exception as e:
-            logger.error(f"Error during audio transcription for file {filename}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error during audio transcription for file {filename}: {str(e)}",
+                exc_info=True,
+            )
             raise

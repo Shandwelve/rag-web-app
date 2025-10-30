@@ -31,7 +31,7 @@ class BaseContentManager(ABC):
             for chunk in chunks:
                 if chunk.category == "CompositeElement":
                     texts.append(chunk)
-            
+
             images = self._get_images_base64(chunks)
             logger.info(f"Processing completed. Extracted {len(texts)} text chunks and {len(images)} images")
             return texts, images

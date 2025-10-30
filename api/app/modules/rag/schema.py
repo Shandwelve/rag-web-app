@@ -107,6 +107,7 @@ class QAResponse(BaseModel):
 class QAPairResponse(BaseModel):
     question: QuestionResponse
     answer: QAResponse
+    images: list[ImageReference] = []
 
 
 class QuestionStats(BaseModel):

@@ -121,6 +121,27 @@ export function QuestionHistory() {
                       <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                         {qaPair.answer.answer_text}
                       </p>
+                      {qaPair.images && qaPair.images.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs text-muted-foreground font-medium">Images:</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {qaPair.images.map((image, idx) => (
+                              <div key={idx} className="relative rounded-lg overflow-hidden border">
+                                <img
+                                  src={image.image_path}
+                                  alt={image.description || `Image ${idx + 1}`}
+                                  className="w-full h-auto object-contain max-h-64"
+                                />
+                                {image.description && (
+                                  <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-2">
+                                    {image.description}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <Button
                       variant="ghost"

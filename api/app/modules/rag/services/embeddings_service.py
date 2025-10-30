@@ -29,7 +29,9 @@ class EmbeddingsService:
         logger.debug(f"Generating embeddings for {len(texts)} texts")
         try:
             embeddings = self.model.encode(texts).tolist()
-            logger.debug(f"Embeddings generated. Count: {len(embeddings)}, Dimension: {len(embeddings[0]) if embeddings else 0}")
+            logger.debug(
+                f"Embeddings generated. Count: {len(embeddings)}, Dimension: {len(embeddings[0]) if embeddings else 0}"
+            )
             return embeddings
         except Exception as e:
             logger.error(f"Error generating embeddings: {str(e)}", exc_info=True)

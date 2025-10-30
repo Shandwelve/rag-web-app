@@ -16,7 +16,6 @@ from app.modules.files.repository import FileRepository
 from app.modules.files.schema import FileContentResponse, FileType
 from app.modules.rag.services import VectorStoreManager
 
-
 logger = get_logger(__name__)
 
 

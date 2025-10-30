@@ -41,7 +41,7 @@ async def get_question_history(
     document_service: Annotated[DocumentService, Depends(DocumentService)],
     limit: int = Query(default=50, le=100),
 ) -> list[QAPairResponse]:
-    return await document_service.get_question_history(current_user.id, limit)
+    return await document_service.get_question_history(limit)
 
 
 @router.get("/session/{session_id}", response_model=list[QAPairResponse])

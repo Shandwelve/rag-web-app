@@ -7,26 +7,29 @@ from fastapi import Depends, UploadFile
 from app.core.logging import get_logger
 from app.modules.files.repository import FileRepository
 from app.modules.files.schema import FileType
-from app.modules.rag.document_chunk_repository import DocumentChunkRepository
-from app.modules.rag.image_repository import ImageRepository
-from app.modules.rag.models import Answer, Question, Image
-from app.modules.rag.repository import QARepository
+from app.modules.rag.models import Answer, Image, Question
+from app.modules.rag.repositories.document_chunk import DocumentChunkRepository
+from app.modules.rag.repositories.image import ImageRepository
+from app.modules.rag.repositories.qa import QARepository
 from app.modules.rag.schema import (
     AnswerCreate,
     AnswerResponse,
     ImageReference,
+    QAPairResponse,
+    QAResponse,
     QuestionCreate,
     QuestionRequest,
+    QuestionResponse,
     QuestionStats,
     RAGResult,
     SourceReference,
-    QAPairResponse,
-    QuestionResponse,
-    QAResponse,
 )
 from app.modules.rag.services.audio_processing_service import AudioProcessingService
+from app.modules.rag.services.content_manager import (
+    DOCXContentManager,
+    PDFContentManager,
+)
 from app.modules.rag.services.openai_service import OpenAIService
-from app.modules.rag.services.content_manager import PDFContentManager, DOCXContentManager
 from app.modules.rag.services.vector_store_manager import VectorStoreManager
 
 logger = get_logger(__name__)
@@ -179,18 +182,22 @@ class DocumentService:
             question_id=question_id,
         )
 
-    async def get_question_history(self, user_id: int, limit: int = 50) -> list[QAPairResponse]:
-        qa_pairs = await self.qa_repository.get_qa_pairs_by_user(user_id, limit)
+    async def get_question_history(self, limit: int = 50) -> list[QAPairResponse]:
+        qa_pairs = await self.qa_repository.get_qa_pairs(limit)
         result = []
         for qa_pair in qa_pairs:
             question_dict = qa_pair[0].model_dump()
             answer_dict = qa_pair[1].model_dump()
             if answer_dict.get("processing_time_ms") is not None:
                 answer_dict["processing_time_ms"] = str(answer_dict["processing_time_ms"])
+
+            images = await self._get_images_from_answer(answer_dict.get("sources_used"))
+
             result.append(
                 QAPairResponse(
                     question=QuestionResponse.model_validate(question_dict),
-                    answer=QAResponse.model_validate(answer_dict)
+                    answer=QAResponse.model_validate(answer_dict),
+                    images=images,
                 )
             )
         return result
@@ -205,14 +212,61 @@ class DocumentService:
                 answer_dict = answers[0].model_dump()
                 if answer_dict.get("processing_time_ms") is not None:
                     answer_dict["processing_time_ms"] = str(answer_dict["processing_time_ms"])
+
+                images = await self._get_images_from_answer(answer_dict.get("sources_used"))
+
                 qa_pairs.append(
                     QAPairResponse(
                         question=QuestionResponse.model_validate(question.model_dump()),
-                        answer=QAResponse.model_validate(answer_dict)
+                        answer=QAResponse.model_validate(answer_dict),
+                        images=images,
                     )
                 )
 
         return qa_pairs
+
+    async def _get_images_from_answer(self, sources_used: str | None) -> list[ImageReference]:
+        if not sources_used:
+            return []
+
+        try:
+            sources = json.loads(sources_used)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+        images = []
+        seen_image_ids = set()
+
+        for source in sources:
+            file_id = source.get("file_id")
+            chunk_index = source.get("chunk_index")
+
+            if not file_id or chunk_index is None:
+                continue
+
+            chunk = await self.chunk_repository.get_by_file_id_and_chunk_index(file_id, chunk_index)
+
+            if not chunk:
+                continue
+
+            chunk_images = await self.image_repository.get_by_chunk_id(chunk.id)
+
+            for img in chunk_images:
+                if img.id in seen_image_ids:
+                    continue
+
+                seen_image_ids.add(img.id)
+                images.append(
+                    ImageReference(
+                        image_path=f"data:image/png;base64,{img.image_data}",
+                        description=img.description
+                        or f"Image from {source.get('filename', 'Unknown')} (chunk {chunk_index})",
+                        page_number=img.page_number or source.get("page_number"),
+                        file_id=file_id,
+                    )
+                )
+
+        return images[:5]
 
     async def delete_question(self, question_id: int) -> bool:
         return await self.qa_repository.delete_question(question_id)
@@ -291,9 +345,11 @@ class DocumentService:
         logger.info(f"Processing {len(files)} documents")
         for file in files:
             chunks_exist = await self.chunk_repository.chunk_exists(file.id)
-            
+
             if chunks_exist:
-                logger.debug(f"File {file.id} ({file.original_filename}) already has chunks in database, skipping processing")
+                logger.debug(
+                    f"File {file.id} ({file.original_filename}) already has chunks in database, skipping processing"
+                )
                 continue
 
             try:
@@ -325,34 +381,37 @@ class DocumentService:
                 if documents:
                     logger.debug(f"Adding {len(documents)} document chunks to vector store for file {file.id}")
                     await self.vector_store.add_documents(documents)
-                    
+
                     await self._store_images_for_chunks(file.id, texts, images)
 
                 else:
                     logger.warning(f"No documents extracted from file {file.original_filename}")
 
             except Exception as e:
-                logger.error(f"Error processing file {file.original_filename} (id: {file.id}): {str(e)}", exc_info=True)
+                logger.error(
+                    f"Error processing file {file.original_filename} (id: {file.id}): {str(e)}",
+                    exc_info=True,
+                )
                 continue
 
     async def _store_images_for_chunks(self, file_id: int, texts: list, images: list) -> None:
         try:
             chunks = await self.chunk_repository.get_by_file_id(file_id)
-            
+
             if not chunks:
                 logger.warning(f"No chunks found for file {file_id}, cannot store images")
                 return
 
             chunk_map = {chunk.chunk_index: chunk.id for chunk in chunks}
-            
+
             images_to_store = []
             for i, text in enumerate(texts):
                 page_number = getattr(text.metadata, "page_number", None)
                 chunk_id = chunk_map.get(i)
-                
+
                 if not chunk_id:
                     continue
-                
+
                 chunk_image_list = []
                 for img_b64 in images:
                     img_page = (
@@ -362,12 +421,12 @@ class DocumentService:
                     )
                     if page_number is None or img_page is None or page_number == img_page:
                         chunk_image_list.append(img_b64)
-                
+
                 for img_index, img_b64 in enumerate(chunk_image_list):
                     base64_data = str(img_b64)
                     if base64_data.startswith("data:image"):
                         base64_data = base64_data.split(",", 1)[1] if "," in base64_data else base64_data
-                    
+
                     image = Image(
                         chunk_id=chunk_id,
                         image_data=base64_data,
@@ -377,13 +436,13 @@ class DocumentService:
                         description=f"Image from chunk {i}",
                     )
                     images_to_store.append(image)
-            
+
             if images_to_store:
                 logger.info(f"Storing {len(images_to_store)} images for file {file_id}")
                 await self.image_repository.create_batch(images_to_store)
             else:
                 logger.debug(f"No images to store for file {file_id}")
-                
+
         except Exception as e:
             logger.error(f"Error storing images for file {file_id}: {str(e)}", exc_info=True)
 
@@ -398,21 +457,21 @@ class DocumentService:
         seen_sources = set()
         top_results = search_results[:3]
         relevance_threshold = 0.6
-        
+
         for result in top_results:
             distance = result.get("distance", 1.0)
             if distance > relevance_threshold:
                 continue
-                
+
             metadata = result["metadata"]
             file_id = metadata.get("file_id", 0)
             chunk_index = metadata.get("chunk_index", 0)
             page_number = metadata.get("page_number")
-            
+
             source_key = (file_id, chunk_index, page_number)
             if source_key in seen_sources:
                 continue
-            
+
             seen_sources.add(source_key)
             sources.append(
                 SourceReference(
@@ -430,30 +489,30 @@ class DocumentService:
         seen_image_ids = set()
         top_results = search_results[:3]
         min_relevance_score = 0.4
-        
+
         for result in top_results:
             distance = result.get("distance", 1.0)
             relevance_score = 1.0 - distance
-            
+
             if relevance_score < min_relevance_score:
                 continue
-                
+
             metadata = result["metadata"]
             file_id = metadata.get("file_id")
             chunk_index = metadata.get("chunk_index")
             filename = metadata.get("filename", "Unknown")
 
             chunk = await self.chunk_repository.get_by_file_id_and_chunk_index(file_id, chunk_index)
-            
+
             if not chunk:
                 continue
-            
+
             chunk_images = await self.image_repository.get_by_chunk_id(chunk.id)
-            
+
             for img in chunk_images:
                 if img.id in seen_image_ids:
                     continue
-                
+
                 seen_image_ids.add(img.id)
                 images.append(
                     ImageReference(
