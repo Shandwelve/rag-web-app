@@ -36,6 +36,7 @@ exclude = ["logs*", "migrations*"]
 dev = [
     "black>=25.9.0",
     "mypy>=1.18.2",
+    "pytest-asyncio>=1.2.0",
     "ruff>=0.14.2",
     "types-aiofiles>=25.1.0.20251011",
 ]
