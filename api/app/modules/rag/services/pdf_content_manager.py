@@ -7,7 +7,6 @@ from app.modules.rag.services import BaseContentManager
 logger = get_logger(__name__)
 
 
-
 class PDFContentManager(BaseContentManager):
     def _partition_document(self, file_path: str) -> list[Element]:
         logger.debug(f"Partitioning PDF file: {file_path}")
@@ -30,9 +29,12 @@ class PDFContentManager(BaseContentManager):
                         images_b64.append(element.metadata.image_base64)
 
         for element in elements:
-            if element.category == "Image" and getattr(element.metadata, "image_base64", None):
-                if element.metadata.image_base64 not in images_b64:
-                    images_b64.append(element.metadata.image_base64)
+            if (
+                element.category == "Image"
+                and getattr(element.metadata, "image_base64", None)
+                and element.metadata.image_base64 not in images_b64
+            ):
+                images_b64.append(element.metadata.image_base64)
 
         logger.debug(f"Extracted {len(images_b64)} images from PDF elements")
         return list(set(images_b64))

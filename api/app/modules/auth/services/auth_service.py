@@ -2,6 +2,7 @@ from typing import Annotated
 
 import workos
 from fastapi import Depends
+from workos.session import Session
 
 from app.core.config import settings
 from app.modules.auth.exceptions import AuthenticationError
@@ -30,8 +31,7 @@ class AuthService:
             redirect_uri=settings.WORKOS_REDIRECT_URI,
         )
 
-    def load_sealed_session(self, sealed_session: str | None):
-        """Load and return a sealed session object"""
+    def load_sealed_session(self, sealed_session: str | None) -> Session | None:
         if not sealed_session:
             return None
         try:
@@ -43,18 +43,17 @@ class AuthService:
             return None
 
     def authenticate_with_code(self, code: str) -> str:
-        """Authenticate with authorization code and return sealed session"""
         if not settings.WORKOS_COOKIE_PASSWORD:
             raise AuthenticationError("WORKOS_COOKIE_PASSWORD is not configured. Please set it in your .env file.")
-        
-        # Validate Fernet key format (should be 43-44 characters of URL-safe base64)
+
         cookie_password = settings.WORKOS_COOKIE_PASSWORD.strip()
         if len(cookie_password) < 43:
             raise AuthenticationError(
                 "WORKOS_COOKIE_PASSWORD must be a Fernet key (32 bytes URL-safe base64 encoded, 43-44 characters). "
-                "Generate one with: python3 -c \"import secrets, base64; key = secrets.token_bytes(32); print(base64.urlsafe_b64encode(key).decode())\""
+                'Generate one with: python3 -c "import secrets, base64; key = secrets.token_bytes(32); '
+                'print(base64.urlsafe_b64encode(key).decode())"'
             )
-        
+
         try:
             auth_response = self.client.user_management.authenticate_with_code(
                 code=code,
@@ -66,7 +65,8 @@ class AuthService:
             if "Fernet key" in error_msg:
                 raise AuthenticationError(
                     f"{error_msg}. Generate a valid Fernet key with: "
-                    "python3 -c \"import secrets, base64; key = secrets.token_bytes(32); print(base64.urlsafe_b64encode(key).decode())\""
+                    'python3 -c "import secrets, base64; key = secrets.token_bytes(32); '
+                    'print(base64.urlsafe_b64encode(key).decode())"'
                 )
             raise AuthenticationError(f"Failed to authenticate with code: {error_msg}")
 

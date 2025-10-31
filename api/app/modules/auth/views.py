@@ -36,21 +36,21 @@ async def callback(
 ) -> RedirectResponse:
     try:
         sealed_session = auth_service.authenticate_with_code(code)
-        
+
         session = auth_service.load_sealed_session(sealed_session)
         if not session:
             return RedirectResponse(url=f"{settings.FRONTEND_URL}?error=auth_failed")
-        
+
         auth_response = session.authenticate()
         if not auth_response.authenticated or not auth_response.user:
             return RedirectResponse(url=f"{settings.FRONTEND_URL}?error=auth_failed")
-        
+
         workos_user = auth_response.user
         await auth_service.get_or_create_user_from_workos_user(
             workos_user_id=workos_user.id,
             email=workos_user.email if workos_user.email else "",
         )
-        
+
         response = RedirectResponse(url=settings.FRONTEND_URL)
         response.set_cookie(
             "wos_session",
@@ -62,7 +62,7 @@ async def callback(
         return response
     except AuthenticationError as e:
         return RedirectResponse(url=f"{settings.FRONTEND_URL}?error={str(e)}")
-    except Exception as e:
+    except Exception:
         return RedirectResponse(url=f"{settings.FRONTEND_URL}?error=auth_failed")
 
 
@@ -73,12 +73,11 @@ async def logout(
 ) -> RedirectResponse:
     sealed_session = request.cookies.get("wos_session")
     logout_url = auth_service.get_logout_url(sealed_session)
-    
+    response = RedirectResponse(url=settings.FRONTEND_URL)
+
     if logout_url:
         response = RedirectResponse(url=logout_url)
-    else:
-        response = RedirectResponse(url=settings.FRONTEND_URL)
-    
+
     response.delete_cookie("wos_session")
     return response
 
@@ -93,6 +92,7 @@ async def get_current_user_info(
         email=current_user.email,
         role=current_user.role,
     )
+
 
 @router.post("/users", response_model=UserResponse)
 async def create_user(

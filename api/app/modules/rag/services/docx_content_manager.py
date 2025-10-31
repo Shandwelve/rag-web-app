@@ -1,15 +1,13 @@
 import base64
 
 import docx
+from unstructured.documents.elements import Element
 from unstructured.partition.docx import partition_docx
 
 from app.core.logging import get_logger
 from app.modules.rag.services import BaseContentManager
-from unstructured.documents.elements import Element
-
 
 logger = get_logger(__name__)
-
 
 
 class DOCXContentManager(BaseContentManager):
@@ -41,7 +39,10 @@ class DOCXContentManager(BaseContentManager):
                     images_b64.append(b64_string)
 
         except Exception as e:
-            logger.error(f"Error extracting images from DOCX {file_path}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error extracting images from DOCX {file_path}: {str(e)}",
+                exc_info=True,
+            )
 
         logger.debug(f"Extracted {len(images_b64)} images from DOCX")
         return images_b64

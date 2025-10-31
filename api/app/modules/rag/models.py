@@ -59,12 +59,12 @@ class Image(BaseModel, table=True):
             index=True,
         ),
     )
-    image_data: str = Field(sa_column=Column(Text, nullable=False))  # base64 encoded image
+    image_data: str = Field(sa_column=Column(Text, nullable=False))
     file_id: int = Field(
         sa_column=Column(ForeignKey("file.id", ondelete="CASCADE"), nullable=False, index=True),
     )
     page_number: int | None = Field(nullable=True)
     description: str | None = Field(nullable=True)
-    image_index: int = Field(nullable=False, default=0)  # Order of image within chunk
+    image_index: int = Field(nullable=False, default=0)
 
     chunk: DocumentChunk = Relationship(back_populates="images")

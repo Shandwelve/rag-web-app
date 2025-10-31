@@ -24,11 +24,11 @@ from app.modules.rag.schema import (
     RAGResult,
     SourceReference,
 )
-from app.modules.rag.services.audio_processing_service import AudioProcessingService
 from app.modules.rag.services import (
     DOCXContentManager,
     PDFContentManager,
 )
+from app.modules.rag.services.audio_processing_service import AudioProcessingService
 from app.modules.rag.services.openai_service import OpenAIService
 from app.modules.rag.services.vector_store_manager import VectorStoreManager
 

@@ -1,11 +1,31 @@
+.PHONY: help db.make_migrations db.up db.down black.run ruff.run mypy.run app.start app.stop
+
+.DEFAULT_GOAL := help
+
 help:
-	@echo "Makefile"
+	@echo "RAG Web Application - Makefile"
 	@echo "usage: make COMMAND"
 	@echo ""
-	@echo "Commands:"
-	@echo "  db.make_migrations Generate migrations file"
-	@echo "  db.up              Run migrations"
-	@echo "  app.drop           Drop app"
+	@echo "Database Commands:"
+	@echo "  db.make_migrations    Generate new migration file (requires m='message')"
+	@echo "                        Example: make db.make_migrations m='Add user table'"
+	@echo "  db.up                 Run all pending migrations"
+	@echo "  db.down               Rollback all migrations to base"
+	@echo ""
+	@echo "Code Quality Commands:"
+	@echo "  black.run             Format Python code with Black"
+	@echo "  ruff.run              Lint and format code with Ruff"
+	@echo "  mypy.run              Type check code with MyPy"
+	@echo ""
+	@echo "Application Commands:"
+	@echo "  app.start             Start Docker containers, API server, and client dev server"
+	@echo "  app.stop              Stop all Docker containers and running processes"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make db.up                                    # Run migrations"
+	@echo "  make db.make_migrations m='Add user table'   # Create migration"
+	@echo "  make app.start                                # Start entire application"
+	@echo "  make black.run                                # Format code"
 
 
 db.make_migrations:
@@ -27,8 +47,18 @@ db.down:
 	@cd api && uv run alembic downgrade base
 
 app.start:
-	@docker-compose up -d --build --force-recreate
+	@docker-compose up -d
+	@echo "Starting API server in background..."
+	@cd api && uv run python -m app.main &
+	@echo "Starting client development server..."
+	@cd client && npm run dev
 
 app.stop:
-	@docker stop $$(docker ps -aq)
-	@docker rm $$(docker ps -aq)
+	@echo "Stopping Docker containers..."
+	-@docker stop $$(docker ps -aq) 2>/dev/null
+	-@docker rm $$(docker ps -aq) 2>/dev/null
+	@echo "Stopping API and client servers..."
+	-@pkill -f "python -m app.main" 2>/dev/null
+	-@pkill -f "npm run dev" 2>/dev/null
+	-@pkill -f "vite" 2>/dev/null
+	@echo "All processes stopped."

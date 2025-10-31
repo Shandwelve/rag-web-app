@@ -28,7 +28,6 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     CHAT_MODEL: str = "gpt-4o-mini"
     MAX_TOKENS: int = 1000
-    CHUNK_OVERLAP: int = 200
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).parent.parent.parent / ".env",
