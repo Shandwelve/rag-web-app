@@ -26,7 +26,6 @@ export function QuestionHistory() {
   }
 
   useEffect(() => {
-    // Prevent duplicate requests (e.g., from React StrictMode)
     if (fetchInProgress.current) return
     
     fetchInProgress.current = true

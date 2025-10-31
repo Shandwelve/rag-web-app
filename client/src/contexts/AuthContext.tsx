@@ -33,13 +33,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         const currentUser = await AuthService.getCurrentUser()
         setUser(currentUser)
-        // Store user in localStorage for quick access
         localStorage.setItem('auth_user', JSON.stringify(currentUser))
       } catch (error) {
-        // User is not authenticated or session expired - this is normal for unauthenticated users
         setUser(null)
         localStorage.removeItem('auth_user')
-        // Don't log errors for unauthenticated users - it's expected
         if (error instanceof Error && !error.message.includes('Unauthorized')) {
           console.error('Auth check error:', error)
         }

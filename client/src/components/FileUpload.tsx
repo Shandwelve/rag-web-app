@@ -37,14 +37,12 @@ export function FileUpload({ onFileUpload, isUploading = false }: FileUploadProp
     
     try {
       await onFileUpload(file)
-      // Update status to "ready" after successful upload
-      setUploadedFiles(prev => prev.map(f => 
+      setUploadedFiles(prev => prev.map(f =>
         f.id === fileId ? { ...f, status: "ready" } : f
       ))
     } catch (error) {
       console.error("Upload failed:", error)
-      // Update status to "error" on failure
-      setUploadedFiles(prev => prev.map(f => 
+      setUploadedFiles(prev => prev.map(f =>
         f.id === fileId ? { ...f, status: "error" } : f
       ))
     }

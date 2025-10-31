@@ -26,7 +26,6 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     const handleAuthCallback = async () => {
-      // Only process callback if we're not loading and haven't processed yet
       if (isLoading || authCallbackProcessed.current) {
         return
       }
@@ -34,7 +33,6 @@ const AppContent: React.FC = () => {
       const urlParams = new URLSearchParams(window.location.search)
       const error = urlParams.get('error')
       
-      // Handle error cases
       if (error) {
         authCallbackProcessed.current = true
         console.error('Authentication error:', error)
@@ -43,11 +41,8 @@ const AppContent: React.FC = () => {
         return
       }
       
-      // Check if we have a code parameter (from WorkOS redirect)
-      // If backend already handled it, we should just check auth status
       const code = urlParams.get('code')
       if (code) {
-        // Backend should have handled this, but let's verify auth
         authCallbackProcessed.current = true
         try {
           const userResponse = await AuthService.getCurrentUser()
@@ -61,7 +56,6 @@ const AppContent: React.FC = () => {
       }
     }
 
-    // Only run callback handler after loading is complete
     if (!isLoading) {
       handleAuthCallback()
     }
@@ -129,14 +123,12 @@ const AppContent: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-gray-50 to-white">
         <Card className="p-10 max-w-lg w-full shadow-lg border-0">
-          {/* Icon in gradient container */}
           <div className="flex justify-center mb-6">
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-300 to-white flex items-center justify-center shadow-md">
               <Lock className="h-10 w-10 text-gray-700" />
             </div>
           </div>
           
-          {/* Welcome text */}
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold mb-3 text-gray-900">Welcome</h1>
             <p className="text-lg text-muted-foreground">
@@ -144,14 +136,12 @@ const AppContent: React.FC = () => {
             </p>
           </div>
           
-          {/* Error message */}
           {filesError && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
               <p className="text-sm text-red-600">{filesError}</p>
             </div>
           )}
           
-          {/* Login buttons */}
           <div className="space-y-3">
             <LoginButton />
           </div>

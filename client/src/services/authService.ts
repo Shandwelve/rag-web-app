@@ -36,7 +36,6 @@ export class AuthService {
     if (!response.ok) {
       throw new Error('Logout failed')
     }
-    // The backend will redirect, but we handle it client-side too
     window.location.href = window.location.origin
   }
 }
