@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     WORKOS_CLIENT_ID: str = ""
     WORKOS_REDIRECT_URI: str = ""
     WORKOS_COOKIE_PASSWORD: str = ""
+    WORKOS_ORGANIZATION_ID: str = ""
     FRONTEND_URL: str = ""
 
     JWT_SECRET_KEY: str = ""

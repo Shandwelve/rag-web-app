@@ -61,10 +61,11 @@ async def get_current_user(
     user = await user_repository.get_by_workos_id(workos_user.id)
 
     if user is None:
+        workos_role = await auth_service.get_user_role_from_workos(workos_user.id)
         user = User(
             workos_id=workos_user.id,
             email=workos_user.email if workos_user.email else "",
-            role=UserRole.USER,
+            role=workos_role,
         )
         user = await user_repository.create(user)
 

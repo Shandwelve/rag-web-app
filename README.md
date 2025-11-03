@@ -41,7 +41,7 @@ rag-web-app/
 ### Backend
 - **Framework**: FastAPI
 - **Database**: PostgreSQL with pgvector extension
-- **Vector Store**: ChromaDB
+- **Vector Store**: PG Vector
 - **Authentication**: WorkOS
 - **AI/ML**: OpenAI GPT models, Sentence Transformers
 - **File Processing**: Unstructured library

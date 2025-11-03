@@ -5,6 +5,7 @@ from fastapi import Depends
 from workos.session import Session
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.modules.auth.exceptions import AuthenticationError
 from app.modules.auth.models import User
 from app.modules.auth.repository import UserRepository
@@ -15,6 +16,8 @@ from app.modules.auth.schema import (
     UserRole,
     UserUpdate,
 )
+
+logger = get_logger(__name__)
 
 
 class AuthService:
@@ -70,19 +73,40 @@ class AuthService:
                 )
             raise AuthenticationError(f"Failed to authenticate with code: {error_msg}")
 
+    async def get_user_role_from_workos(self, workos_user_id: str) -> UserRole:
+        if not settings.WORKOS_ORGANIZATION_ID:
+            return UserRole.USER
+
+        try:
+            organization_memberships = self.client.user_management.list_organization_memberships(user_id=workos_user_id)
+            return UserRole(organization_memberships.data[0].role["slug"])
+        except Exception as e:
+            logger.warning(f"Failed to get role from WorkOS for user {workos_user_id}: {str(e)}")
+
+        return UserRole.USER
+
     async def get_or_create_user_from_workos_user(self, workos_user_id: str, email: str) -> User:
+        organization_memberships = self.client.user_management.list_organization_memberships(user_id=workos_user_id)
+        if not organization_memberships:
+            self.client.user_management.create_organization_membership(
+                organization_id=settings.WORKOS_ORGANIZATION_ID,
+                user_id=workos_user_id,
+            )
+        workos_role = await self.get_user_role_from_workos(workos_user_id)
         user = await self.user_repository.get_by_workos_id(workos_user_id)
 
         if user:
             if user.email != email:
                 user.email = email
-                return await self.user_repository.update(user)
+            elif workos_role != user.role:
+                user.role = workos_role
+            await self.user_repository.update(user)
             return user
 
         user = User(
             workos_id=workos_user_id,
             email=email,
-            role=UserRole.USER,
+            role=workos_role,
         )
         return await self.user_repository.create(user)
 
