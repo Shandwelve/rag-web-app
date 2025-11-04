@@ -13,10 +13,10 @@ def setup_logging() -> logging.Logger:
     if isinstance(log_level, str):
         log_level = getattr(logging, log_level.upper(), logging.INFO)
 
-    logger = logging.getLogger("api")
-    logger.setLevel(log_level)
-
-    logger.handlers.clear()
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    
+    root_logger.handlers.clear()
 
     detailed_formatter = logging.Formatter(
         fmt="%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
@@ -28,7 +28,7 @@ def setup_logging() -> logging.Logger:
     console_handler = logging.StreamHandler()
     console_handler.setLevel(log_level)
     console_handler.setFormatter(simple_formatter)
-    logger.addHandler(console_handler)
+    root_logger.addHandler(console_handler)
 
     file_handler = logging.handlers.RotatingFileHandler(
         filename=logs_dir / "api.log",
@@ -38,7 +38,7 @@ def setup_logging() -> logging.Logger:
     )
     file_handler.setLevel(log_level)
     file_handler.setFormatter(detailed_formatter)
-    logger.addHandler(file_handler)
+    root_logger.addHandler(file_handler)
 
     error_handler = logging.handlers.RotatingFileHandler(
         filename=logs_dir / "error.log",
@@ -48,9 +48,18 @@ def setup_logging() -> logging.Logger:
     )
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(detailed_formatter)
-    logger.addHandler(error_handler)
+    root_logger.addHandler(error_handler)
 
-    logger.propagate = False
+    # Suppress verbose third-party loggers
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("fastapi").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    
+    # Get the "api" logger for backward compatibility
+    logger = logging.getLogger("api")
+    logger.setLevel(log_level)
 
     return logger
 

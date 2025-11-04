@@ -13,8 +13,8 @@ def test_setup_logging_creates_logger() -> None:
 
 
 def test_setup_logging_creates_handlers() -> None:
-    logger = setup_logging()
-    assert len(logger.handlers) == 3
+    root_logger = logging.getLogger()
+    assert len(root_logger.handlers) == 3
 
 
 def test_setup_logging_log_level_string() -> None:
