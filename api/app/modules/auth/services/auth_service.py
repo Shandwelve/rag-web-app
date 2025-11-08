@@ -73,6 +73,20 @@ class AuthService:
                 )
             raise AuthenticationError(f"Failed to authenticate with code: {error_msg}")
 
+    def _ensure_organization_membership(self, workos_user_id: str) -> None:
+        if not settings.WORKOS_ORGANIZATION_ID:
+            logger.warning("WORKOS_ORGANIZATION_ID is not configured. User will not be associated with an organization.")
+            return
+
+        try:
+            self.client.user_management.create_organization_membership(
+                organization_id=settings.WORKOS_ORGANIZATION_ID,
+                user_id=workos_user_id,
+            )
+            logger.info(f"Created/verified organization membership for user {workos_user_id} in organization {settings.WORKOS_ORGANIZATION_ID}")
+        except Exception as e:
+            logger.error(f"Failed to create organization membership for user {workos_user_id}: {str(e)}")
+
     async def get_user_role_from_workos(self, workos_user_id: str) -> UserRole:
         if not settings.WORKOS_ORGANIZATION_ID:
             return UserRole.USER
@@ -86,12 +100,7 @@ class AuthService:
         return UserRole.USER
 
     async def get_or_create_user_from_workos_user(self, workos_user_id: str, email: str) -> User:
-        organization_memberships = self.client.user_management.list_organization_memberships(user_id=workos_user_id)
-        if not organization_memberships:
-            self.client.user_management.create_organization_membership(
-                organization_id=settings.WORKOS_ORGANIZATION_ID,
-                user_id=workos_user_id,
-            )
+        self._ensure_organization_membership(workos_user_id)
         workos_role = await self.get_user_role_from_workos(workos_user_id)
         user = await self.user_repository.get_by_workos_id(workos_user_id)
 
@@ -126,7 +135,19 @@ class AuthService:
         if existing_user:
             raise ValueError("User with this email already exists")
 
-        user = User(email=user_data.email, role=user_data.role, workos_id=None)
+        try:
+            workos_user = self.client.user_management.create_user(
+                email=user_data.email,
+            )
+            workos_id = workos_user.id
+        except Exception as e:
+            logger.error(f"Failed to create WorkOS user for {user_data.email}: {str(e)}")
+            raise ValueError(f"Failed to create WorkOS user: {str(e)}")
+
+        self._ensure_organization_membership(workos_id)
+
+        workos_role = await self.get_user_role_from_workos(workos_id)
+        user = User(email=user_data.email, role=workos_role, workos_id=workos_id)
         created_user = await self.user_repository.create(user)
         return UserResponse(
             id=created_user.id,
