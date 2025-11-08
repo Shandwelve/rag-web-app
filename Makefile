@@ -47,8 +47,10 @@ db.down:
 	@cd api && uv run alembic downgrade base
 
 app.start:
+	@docker network create external_network || true
 	@docker-compose up -d
 	@echo "Starting API server in background..."
+	@make db.up
 	@cd api && uv run python -m app.main &
 	@echo "Starting client development server..."
 	@cd client && npm run dev
