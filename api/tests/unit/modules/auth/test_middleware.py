@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from app.modules.auth.middleware import get_current_admin_user, get_current_user
 from app.modules.auth.models import User
+from app.modules.auth.schema import UserRole
 
 
 @pytest.mark.asyncio
@@ -61,6 +62,7 @@ async def test_get_current_user_creates_new_user(mock_request: MagicMock, mock_s
     new_user = User(id=1, workos_id="workos_123", email="test@example.com")
     mock_user_repo.create = AsyncMock(return_value=new_user)
     mock_auth_service = MagicMock()
+    mock_auth_service.get_user_role_from_workos = AsyncMock(return_value=UserRole.USER)
 
     mock_session_obj = MagicMock()
     mock_auth_response = MagicMock()

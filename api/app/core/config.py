@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import logging
 from pathlib import Path
 
@@ -18,7 +20,7 @@ class Settings(BaseSettings):
     WORKOS_API_KEY: str = ""
     WORKOS_CLIENT_ID: str = ""
     WORKOS_REDIRECT_URI: str = ""
-    WORKOS_COOKIE_PASSWORD: str = ""
+    WORKOS_COOKIE_SECRET: str = ""
     WORKOS_ORGANIZATION_ID: str = ""
     FRONTEND_URL: str = ""
 
@@ -43,6 +45,13 @@ class Settings(BaseSettings):
     @computed_field
     def STORAGE_DIR(self) -> Path:  # noqa: N802
         return Path(__file__).parent.parent.parent / self.STORAGE_PATH
+
+    @computed_field
+    def WORKOS_COOKIE_PASSWORD(self) -> str:  # noqa: N802
+        if not self.WORKOS_COOKIE_SECRET:
+            return ""
+        key_bytes = hashlib.sha256(self.WORKOS_COOKIE_SECRET.encode()).digest()
+        return base64.urlsafe_b64encode(key_bytes).decode()
 
 
 settings = Settings()

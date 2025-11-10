@@ -47,7 +47,7 @@ class AuthService:
 
     def authenticate_with_code(self, code: str) -> str:
         if not settings.WORKOS_COOKIE_PASSWORD:
-            raise AuthenticationError("WORKOS_COOKIE_PASSWORD is not configured. Please set it in your .env file.")
+            raise AuthenticationError("WORKOS_COOKIE_SECRET is not configured. Please set it in your .env file.")
 
         cookie_password = settings.WORKOS_COOKIE_PASSWORD.strip()
         if len(cookie_password) < 43:
