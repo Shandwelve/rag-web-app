@@ -44,7 +44,7 @@ STORAGE_PATH=storage
 WORKOS_API_KEY=your_workos_api_key_here
 WORKOS_CLIENT_ID=your_workos_client_id_here
 WORKOS_REDIRECT_URI=http://localhost:5173/auth/callback
-WORKOS_COOKIE_PASSWORD=your_cookie_password_here
+WORKOS_COOKIE_SECRET=your_cookie_secret_here
 
 # JWT Configuration
 JWT_SECRET_KEY=your_jwt_secret_key_here
